@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algorand Transaction Sonifier</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #004d4d, #001a1a);
+            color: #eee;
+            margin: 0;
+            padding: 10px;
+            font-size: 12px;
+        }
+        
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 10px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        button {
+            background-color: #006666;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #009999;
+        }
+        
+        .synth-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Responsive columns */
+            gap: 7px;
+        }
+        
+        .mini-synth {
+            background-color: rgba(0, 77, 77, 0.5);
+            border-radius: 4px;
+            padding: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            margin-bottom: 7px;
+            display: flex; /* Allow sections to grow */
+            flex-direction: column; /* Stack sections vertically */
+        }
+        
+        .synth-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #006666;
+            padding-bottom: 3px;
+            flex-shrink: 0; /* Prevent header from shrinking */
+        }
+        
+        .led {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #333;
+            margin-right: 3px;
+        }
+        
+        .led.active {
+            background-color: #00ff00;
+            box-shadow: 0 0 3px #00ff00;
+        }
+        
+        .control-label {
+            font-size: 10px;
+            display: inline-block;
+            width: 100%;
+            text-align: center;
+            margin-bottom: 1px;
+            white-space: nowrap; /* Prevent wrapping */
+        }
+        
+        .control-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 3px;
+            gap: 5px; /* Add gap between elements in a row (like ADSR inputs) */
+        }
+
+        /* Target specifically rows with side-by-side labels for ADSR */
+         .adsr-section .control-row:nth-child(1) .control-label, 
+         .adsr-section .control-row:nth-child(3) .control-label {
+             width: 50%; /* Make ADSR labels share space */
+         }
+        
+        .control-row input[type="range"] {
+            width: 100%; /* Take full width within its container */
+            height: 5px;
+        }
+        
+        /* Style for all control sections */
+        .volume-section, .base-note-section, .gate-section, .adsr-section, .waveform-section, .effect-controls, .reverb-section { 
+            margin-top: 5px;
+            padding-top: 3px;
+            border-top: 1px dashed #006666;
+        }
+        
+        select.waveform-select { /* More specific selector */
+            background-color: #004d4d;
+            color: white;
+            border: none;
+            padding: 2px;
+            border-radius: 3px;
+            width: 100%;
+            font-size: 10px;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        
+        /* Value display spans nested inside control labels */
+        .control-label span[id$="-value"] { 
+            font-size: 10px;
+            background: rgba(0,0,0,0.2);
+            padding: 1px 3px;
+            border-radius: 2px;
+            text-align: center;
+            min-width: 25px; /* Slightly wider */
+            display: inline-block; /* Allow width */
+            margin-left: 3px; /* Space from label text */
+        }
+        
+        .status-container, .preset-container {
+            margin-top: 10px;
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .actions-bar {
+            margin: 10px 0;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        /* Specific styling for base note controls row */
+        .base-note-controls {
+            justify-content: space-between; /* Space out buttons and display */
+            align-items: center;
+        }
+        .base-note-controls button {
+            padding: 1px 5px; /* Smaller padding */
+            font-size: 12px; /* Larger font for arrows */
+            line-height: 1; /* Adjust line height */
+            min-width: 20px;
+        }
+        .base-note-display {
+            font-weight: bold;
+            font-size: 11px;
+            background: rgba(0,0,0,0.15);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        
+        /* Style for the new type counts container */
+        #type-counts-container {
+            margin-top: 8px; /* Add some space above the counts */
+            padding-top: 5px;
+            border-top: 1px solid rgba(0, 102, 102, 0.5); /* Subtle separator */
+            display: flex; /* Arrange counts horizontally */
+            flex-wrap: wrap; /* Allow wrapping */
+            gap: 10px; /* Space between counts */
+            font-size: 10px; /* Smaller font for counts */
+        }
+        .type-count {
+            /* Optional: Add styling per count item if needed */
+             background-color: rgba(0,0,0,0.1);
+             padding: 2px 5px;
+             border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <h1>Algorand TX Sonifier</h1>
+        <div class="controls">
+            <button id="start-btn">Start</button>
+            <button id="stop-btn">Stop</button>
+            <button id="record-btn">Record</button>
+            <button id="save-preset">Save Preset</button>
+            <button id="load-preset">Load Preset</button>
+        </div>
+    </div>
+    
+    <div class="actions-bar">
+        <button id="add-synth">+ Add Synth</button>
+        </div>
+        
+    <div class="synth-grid" id="synth-container">
+        <!-- Synths will be dynamically added here by JS -->
+    </div>
+    
+    <div class="status-container">
+        <h3>Transaction Stream Status</h3>
+        <div id="status">Ready</div>
+        <div id="transaction-count">0 transactions processed</div>
+        <div id="type-counts-container">
+            <!-- Counts will be dynamically populated here by JS -->
+        </div>
+    </div>
+    
+    <div class="preset-container">
+        <h3>Presets</h3>
+        <input type="text" id="preset-name" placeholder="Preset Name">
+        <button id="save-preset-name">Save</button>
+        <select id="preset-list">
+            <option value="">Select a preset</option>
+            <!-- Presets will be dynamically added here -->
+        </select>
+    </div>
+    
+    <script type="module" src="proto-synth.js"></script>
+</body>
+</html>
