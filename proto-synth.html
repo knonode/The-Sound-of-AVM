@@ -56,16 +56,29 @@
             margin-bottom: 7px;
             display: flex; /* Allow sections to grow */
             flex-direction: column; /* Stack sections vertically */
+            transition: background-color 0.3s ease; /* Add smooth transition */
         }
+        
+        /* Type-specific background colors */
+        .mini-synth.synth-pay { background-color: rgba(127, 150, 150, 0.7); }
+        .mini-synth.synth-axfer { background-color: rgba(194, 167, 128, 0.562); }
+        .mini-synth.synth-appl { background-color: rgba(0, 100, 70, 0.7); }
+        .mini-synth.synth-acfg { background-color: rgba(179, 133, 201, 0.507); }
+        .mini-synth.synth-keyreg { background-color: rgba(78, 54, 46, 0.623); }
+        .mini-synth.synth-afrz { background-color: rgba(38, 53, 189, 0.514); }
+        .mini-synth.synth-stpf { background-color: rgba(14, 61, 59, 0.493); }
+        .mini-synth.synth-hb { background-color: rgba(233, 87, 87, 0.589); }
+        /* Add more rules if other main types exist */
         
         .synth-header {
             display: flex;
-            justify-content: space-between;
+            justify-content: space-between; 
             align-items: center;
             margin-bottom: 5px;
             border-bottom: 1px solid #006666;
             padding-bottom: 3px;
-            flex-shrink: 0; /* Prevent header from shrinking */
+            flex-shrink: 0; 
+            gap: 3px; /* Reduced gap */
         }
         
         .led {
@@ -73,7 +86,7 @@
             height: 8px;
             border-radius: 50%;
             background-color: #333;
-            margin-right: 3px;
+            margin-right: 0; /* Remove default margin if any */
         }
         
         .led.active {
@@ -110,7 +123,7 @@
         }
         
         /* Style for all control sections */
-        .volume-section, .base-note-section, .gate-section, .adsr-section, .waveform-section, .effect-controls, .reverb-section { 
+        .volume-section, .base-note-section, .gate-section, .adsr-section, .waveform-section, .effect-controls, .reverb-section, .lfo-section {
             margin-top: 5px;
             padding-top: 3px;
             border-top: 1px dashed #006666;
@@ -187,6 +200,233 @@
              padding: 2px 5px;
              border-radius: 3px;
         }
+
+        /* Update styles for header icon buttons to work better with SVG */
+        .synth-header .mute-btn,
+        .synth-header .close-btn {
+            background-color: transparent;
+            border: none;
+            color: #ccc; /* Light gray icon/text color */
+            padding: 0; /* Remove padding */
+            margin-left: 0; /* Remove specific margin-left */
+            font-size: 16px; /* Adjust base size for SVG */
+            line-height: 1; 
+            cursor: pointer;
+            transition: color 0.2s ease; 
+            /* Add vertical alignment */
+            vertical-align: middle; 
+            width: 1.2em; /* Give explicit width */
+            height: 1.2em; /* Give explicit height */
+            display: inline-flex; /* Helps with alignment */
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0; /* Prevent buttons from shrinking */
+        }
+
+        .synth-header .mute-btn:hover,
+        .synth-header .close-btn:hover {
+            color: #fff; /* Brighter color on hover */
+        }
+
+        /* Ensure SVG inside the button scales correctly */
+        .synth-header .mute-btn svg {
+             width: 1em; /* Make SVG size relative to font-size */
+             height: 1em;
+        }
+
+        /* Adjust spacing for specific items in the header */
+        .synth-header .led {
+             /* Default spacing might be fine */
+        }
+        .synth-header .type-select {
+             flex-grow: 0; 
+             flex-shrink: 1; /* Allow shrinking */
+             flex-basis: auto; 
+             max-width: 60px; /* Further reduced max width */
+             min-width: 45px; /* Further reduced min width */
+        }
+        .synth-header .subtype-select {
+             flex-grow: 0;
+             flex-shrink: 1; /* Allow shrinking */
+             flex-basis: auto;
+             max-width: 65px; /* Further reduced max width */
+             min-width: 45px; /* Further reduced min width */
+         }
+
+        /* Minimal style for selects in header */
+        .synth-header select {
+            background-color: rgba(0, 0, 0, 0.2); /* Darker transparent background */
+            color: #029e0a;
+            border: 1px solid #004d4d; /* Subtle border matching theme */
+            padding: 1px 2px; /* Slightly adjust padding if needed */
+            padding-right: 1em; /* Reduced space for arrow */
+            border-radius: 3px;
+            font-size: 10px;
+            -webkit-appearance: none; /* Remove default styling */
+            -moz-appearance: none;
+            appearance: none;
+            /* Add custom arrow or leave it minimal */
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ccc%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat;
+            background-position: right 3px top 50%; /* Adjusted position slightly for smaller padding */
+            background-size: .6em auto; /* Slightly smaller arrow */
+        }
+
+        /* Parameter Area Styling */
+        .parameter-area {
+            margin-top: 8px;
+            padding: 8px 5px;
+            border-top: 1px dashed #006666;
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 0 0 4px 4px; /* Match bottom corners */
+            min-height: 30px; /* Ensure it has some height even when empty */
+            font-size: 10px;
+        }
+        .param-control {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .param-control label {
+            flex-basis: 60px; /* Fixed width for labels */
+            flex-shrink: 0;
+            margin-right: 5px; /* Reverted */
+            text-align: left; /* Reverted */
+            white-space: nowrap;
+        }
+        .param-input {
+            width: 100%; /* Take remaining space */
+            min-width: 0; /* <<< Allow input to shrink below content size >>> */
+            background-color: #004d4d;
+            color: rgb(203, 226, 228);
+            border: 1px solid #006666;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 10px;
+            box-sizing: border-box;
+        }
+        .param-input.number-input {
+            max-width: 60px; /* Limit width for number inputs */
+        }
+        .no-params {
+            color: #888; /* Dim text */
+            font-style: italic;
+        }
+        .keyreg-toggle {
+             /* Basic button styling, can be enhanced */
+             background-color: #004d4d;
+             color: white;
+             border: 1px solid #006666;
+             padding: 2px 5px;
+             border-radius: 3px;
+             cursor: pointer;
+        }
+
+        /* --- ADDED: Sequencer Input Styles --- */
+        .sequencer-section {
+            /* Optional: Add margin if needed */
+        }
+        .sequencer-steps {
+            display: flex;
+            justify-content: space-between; /* Distribute steps evenly */
+            gap: 2px; /* Small gap between steps */
+        }
+        .seq-step {
+            flex: 1; /* Allow steps to grow/shrink equally */
+            text-align: center; /* Center input and indicator */
+            position: relative; /* For indicator positioning */
+        }
+        .seq-input {
+            width: 90%; /* Relative width within the step container */
+            max-width: 30px; /* Max width to keep them small */
+            padding: 1px 2px; /* Minimal padding */
+            text-align: center;
+            background-color: #004d4d; /* Match other inputs */
+            color: #eee;
+            border: 1px solid #006666; /* Match other inputs */
+            border-radius: 3px;
+            box-sizing: border-box;
+            font-size: 10px; /* Match other inputs */
+            -moz-appearance: textfield; /* Firefox */
+        }
+        /* Hide number input spinners */
+        .seq-input::-webkit-outer-spin-button,
+        .seq-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .seq-indicator {
+            width: 6px;
+            height: 3px;
+            background-color: #555; /* Dimmed indicator */
+            border-radius: 1px;
+            margin: 1px auto 0; /* Small space below input */
+            transition: background-color 0.05s ease-in-out;
+        }
+        .seq-indicator.active {
+            background-color: #0f0; /* Bright green when active */
+        }
+        /* --- END: Sequencer Input Styles --- */
+
+        /* <<< NEW/MODIFIED: Style for compact dropdowns >>> */
+        .compact-select {
+            background-color: rgba(0, 0, 0, 0.2); /* Darker transparent background */
+            color: #029e0a; /* Green font */
+            border: 1px solid #004d4d; /* Subtle border matching theme */
+            padding: 1px 2px; /* Slightly adjust padding */
+            padding-right: 1em; /* Space for arrow */
+            border-radius: 3px;
+            font-size: 10px;
+            -webkit-appearance: none; /* Remove default styling */
+            -moz-appearance: none;
+            appearance: none;
+            /* Custom arrow */
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ccc%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat;
+            background-position: right 3px top 50%; 
+            background-size: .6em auto; 
+             /* Ensure it works within flex layout */
+             flex-grow: 1; /* Allow select to take available space in its row */
+             min-width: 50px; /* Give it a minimum width */
+        }
+
+        /* Optional: Apply compact style to header selects by default */
+        .synth-header .type-select,
+        .synth-header .subtype-select {
+             /* You might not need specific styles here anymore */
+             /* Or you could add: @extend .compact-select; if using a preprocessor */
+             /* For plain CSS, ensure .compact-select styles are sufficient */
+             /* or re-apply specific flex properties if needed */
+             flex-grow: 0; 
+             flex-shrink: 1; 
+             flex-basis: auto; 
+             max-width: 65px; 
+             min-width: 45px; 
+             /* Re-apply compact styles if needed, or ensure they are inherited */
+             background-color: rgba(0, 0, 0, 0.2);
+             color: #029e0a;
+             border: 1px solid #004d4d;
+             padding: 1px 2px;
+             padding-right: 1em;
+             border-radius: 3px;
+             font-size: 10px;
+             -webkit-appearance: none;
+             -moz-appearance: none;
+             appearance: none;
+             background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ccc%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+             background-repeat: no-repeat;
+             background-position: right 3px top 50%;
+             background-size: .6em auto;
+        }
+
+        /* Ensure labels next to compact selects behave */
+        .control-row .inline-label {
+             width: auto; /* Override potential width: 100% */
+             flex-shrink: 0; /* Don't shrink label */
+             margin-right: 5px; /* Space between label and select */
+             text-align: left;
+        }
+
     </style>
 </head>
 <body>

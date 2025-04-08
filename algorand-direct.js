@@ -2,8 +2,8 @@
 
 // Configuration for connection to your local node
 const ALGOD_SERVER = 'http://localhost';
-const ALGOD_PORT = 8081; // INSERT YOUR PORT HERE
-const ALGOD_TOKEN = 'INSERT_YOUR_ALGOD_TOKEN_HERE';
+const ALGOD_PORT = 8081; // 8080 is the default port for the Algorand API server, you might need to change this
+const ALGOD_TOKEN = 'INSERT YOUR ALGOD_TOKEN HERE';
 
 let pollInterval = null;
 let onNewTransactionCallback = null;
