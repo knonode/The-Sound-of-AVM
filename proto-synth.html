@@ -61,10 +61,10 @@
         
         /* Type-specific background colors */
         .mini-synth.synth-pay { background-color: rgba(127, 150, 150, 0.7); }
-        .mini-synth.synth-axfer { background-color: rgba(194, 167, 128, 0.562); }
+        .mini-synth.synth-axfer { background-color: rgba(83, 55, 55, 0.705); }
         .mini-synth.synth-appl { background-color: rgba(0, 100, 70, 0.7); }
         .mini-synth.synth-acfg { background-color: rgba(179, 133, 201, 0.507); }
-        .mini-synth.synth-keyreg { background-color: rgba(78, 54, 46, 0.623); }
+        .mini-synth.synth-keyreg { background-color: rgb(212, 200, 147); }
         .mini-synth.synth-afrz { background-color: rgba(38, 53, 189, 0.514); }
         .mini-synth.synth-stpf { background-color: rgba(14, 61, 59, 0.493); }
         .mini-synth.synth-hb { background-color: rgba(233, 87, 87, 0.589); }
@@ -123,7 +123,7 @@
         }
         
         /* Style for all control sections */
-        .volume-section, .base-note-section, .gate-section, .adsr-section, .waveform-section, .effect-controls, .reverb-section, .lfo-section {
+        .volume-section, .base-note-section, .gate-section, .adsr-section, .waveform-section, .pitch-section, .delay-section, .effect-controls, .reverb-section, .lfo-section, .compressor-section, .eq-section, .limiter-section {
             margin-top: 5px;
             padding-top: 3px;
             border-top: 1px dashed #006666;
@@ -163,6 +163,11 @@
             margin: 10px 0;
             display: flex;
             justify-content: flex-end;
+            gap: 10px; /* Add gap between buttons */
+        }
+
+        .toggle-btn {
+            background-color: #004d4d; /* A different color */
         }
 
         /* Specific styling for base note controls row */
@@ -199,6 +204,14 @@
              background-color: rgba(0,0,0,0.1);
              padding: 2px 5px;
              border-radius: 3px;
+        }
+
+        .persistent-count {
+            margin-top: 8px;
+            font-size: 10px;
+            color: #aaa;
+            border-top: 1px solid #003333;
+            padding-top: 8px;
         }
 
         /* Update styles for header icon buttons to work better with SVG */
@@ -321,11 +334,6 @@
              border-radius: 3px;
              cursor: pointer;
         }
-
-        /* --- ADDED: Sequencer Input Styles --- */
-        .sequencer-section {
-            /* Optional: Add margin if needed */
-        }
         .sequencer-steps {
             display: flex;
             justify-content: space-between; /* Distribute steps evenly */
@@ -427,6 +435,76 @@
              text-align: left;
         }
 
+        /* Add this to your existing CSS */
+        .synth-block {
+            border-left: 4px solid #00FF00; /* Green for new blocks */
+            background: linear-gradient(135deg, rgba(0, 255, 0, 0.1) 0%, rgba(0, 255, 0, 0.05) 100%);
+        }
+
+        .synth-block .led.active {
+            background-color: #00FF00;
+            box-shadow: 0 0 10px #00FF00;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+            padding-top: 60px;
+        }
+        .modal-content {
+            background-color: #002b2b;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #009999;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 450px;
+            position: relative;
+        }
+        .modal-close {
+            color: #aaa;
+            position: absolute;
+            top: 5px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .modal-close:hover,
+        .modal-close:focus {
+            color: white;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .modal-content h2 { margin-top: 0; }
+        .modal-content input[type="text"], .modal-content input[type="file"] {
+            width: calc(100% - 12px);
+            padding: 5px;
+            margin-bottom: 10px;
+            background-color: #004d4d;
+            border: 1px solid #006666;
+            color: white;
+            border-radius: 3px;
+        }
+        .modal-options { margin: 15px 0; }
+        .modal-options label { cursor: pointer; }
+        .modal-buttons { display: flex; flex-direction: column; gap: 10px; }
+        .modal-buttons button { width: 100%; }
+        .modal-content hr { border-color: #006666; margin: 15px 0; }
+
+        /* <<< NEW: Style for the Master Synth >>> */
+        .master-synth {
+            border: 2px solid #00ffcc; /* A bright, distinct border */
+            background-color: rgba(0, 50, 50, 0.6);
+        }
+
     </style>
 </head>
 <body>
@@ -442,11 +520,13 @@
     </div>
     
     <div class="actions-bar">
+        <button id="toggle-aggr-btn" class="toggle-btn">Aggr Txs</button>
+        <button id="toggle-api-btn" class="toggle-btn">Nodely API</button>
         <button id="add-synth">+ Add Synth</button>
-        </div>
+    </div>
         
     <div class="synth-grid" id="synth-container">
-        <!-- Synths will be dynamically added here by JS -->
+        <!-- All Synths (including Master) will be dynamically added here -->
     </div>
     
     <div class="status-container">
@@ -456,18 +536,56 @@
         <div id="type-counts-container">
             <!-- Counts will be dynamically populated here by JS -->
         </div>
+        <div id="persistent-tx-count" class="persistent-count">Lifetime Txs: 0</div>
+        <div id="persistent-block-count" class="persistent-count">Lifetime Blocks: 0</div>
     </div>
     
-    <div class="preset-container">
-        <h3>Presets</h3>
-        <input type="text" id="preset-name" placeholder="Preset Name">
-        <button id="save-preset-name">Save</button>
-        <select id="preset-list">
-            <option value="">Select a preset</option>
-            <!-- Presets will be dynamically added here -->
-        </select>
+    <!-- Modal for Loading Presets -->
+    <div id="load-preset-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="load-modal-close">&times;</span>
+            <h2>Load Preset</h2>
+            
+            <div id="modal-preset-buttons" class="modal-buttons">
+                <!-- Preset buttons will be dynamically added here by the script -->
+            </div>
+
+            <hr>
+            
+            <h3>Or Upload File</h3>
+            <input type="file" id="preset-file-input" accept=".json">
+        </div>
     </div>
-    
-    <script type="module" src="proto-synth.js"></script>
+
+    <!-- Modal for Saving Presets -->
+    <div id="save-preset-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="save-modal-close">&times;</span>
+            <h2>Save Preset Layout</h2>
+            <input type="text" id="new-preset-name" placeholder="Enter preset name...">
+            <div class="modal-options">
+                <input type="checkbox" id="download-json-toggle" style="vertical-align: middle;">
+                <label for="download-json-toggle">Download as .json file</label>
+            </div>
+            <div class="modal-buttons">
+                <button id="save-new-preset-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for API Token Input -->
+    <div id="api-token-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="token-modal-close">&times;</span>
+            <h2>Enter Algorand Node API Token</h2>
+            <p>Please provide the API token for your local Algorand node. This will be saved in your browser's local storage.</p>
+            <input type="text" id="api-token-input" placeholder="Your API token...">
+            <div class="modal-buttons">
+                <button id="save-api-token-btn">Save and Use Token</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="proto-synth.js?t=1234567890"></script>
 </body>
 </html>

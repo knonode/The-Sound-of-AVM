@@ -1,0 +1,367 @@
+{
+    "activeSynths": [
+        {
+            "id": "synth-1749516737477-xl4ai",
+            "config": {
+                "type": "block",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.17,
+                    "decay": 0.2,
+                    "sustain": 0.5,
+                    "release": 0.13
+                },
+                "volume": -16,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.19,
+                    "feedback": 0.18,
+                    "wet": 1
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 0.3
+                },
+                "lfo": {
+                    "rate": 13.8,
+                    "depth": 74,
+                    "waveform": "triangle",
+                    "destination": "delayTime"
+                },
+                "noteDuration": 0.16,
+                "baseNote": "D1",
+                "sequence": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "currentStepIndex": 4
+            }
+        },
+        {
+            "id": "synth-1744025629918-y0t3j",
+            "config": {
+                "type": "pay",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.16,
+                    "decay": 0.2,
+                    "sustain": 0.3,
+                    "release": 0.52,
+                    "reverb": 6.2
+                },
+                "volume": -19,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.35,
+                    "feedback": 0.35,
+                    "wet": 1
+                },
+                "reverb": {
+                    "decay": 6.2,
+                    "wet": 1
+                },
+                "noteDuration": 0.1,
+                "baseNote": "G4",
+                "sequence": [
+                    0,
+                    5,
+                    0,
+                    0,
+                    -3,
+                    0,
+                    0,
+                    3
+                ],
+                "currentStepIndex": 7
+            }
+        },
+        {
+            "id": "synth-1744025629918-7c58r",
+            "config": {
+                "type": "axfer",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.1,
+                    "decay": 0.33,
+                    "sustain": 0.81,
+                    "release": 1.25,
+                    "reverb": 5.4
+                },
+                "volume": -30,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.43,
+                    "feedback": 0.36,
+                    "wet": 0.23
+                },
+                "reverb": {
+                    "decay": 5.4,
+                    "wet": 0.23
+                },
+                "noteDuration": 0.39,
+                "baseNote": "D2",
+                "sequence": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "currentStepIndex": 3
+            }
+        },
+        {
+            "id": "synth-1744025629918-mwi52",
+            "config": {
+                "type": "appl",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "square"
+                },
+                "envelope": {
+                    "attack": 0.01,
+                    "decay": 0.18,
+                    "sustain": 0.28,
+                    "release": 0.33,
+                    "reverb": 10
+                },
+                "volume": -31.5,
+                "muted": false,
+                "pitch": 12,
+                "delay": {
+                    "time": 0.19,
+                    "feedback": 0.16,
+                    "wet": 1
+                },
+                "reverb": {
+                    "decay": 10,
+                    "wet": 0.71
+                },
+                "noteDuration": 0.05,
+                "baseNote": "A0",
+                "sequence": [
+                    1,
+                    0,
+                    5,
+                    4,
+                    0,
+                    0,
+                    2,
+                    0
+                ],
+                "currentStepIndex": 4
+            }
+        },
+
+        {
+            "id": "synth-1744025629918-khu2t",
+            "config": {
+                "type": "keyreg",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sawtooth"
+                },
+                "envelope": {
+                    "attack": 0.1,
+                    "decay": 0.2,
+                    "sustain": 0.3,
+                    "release": 0.2
+                },
+                "volume": -30,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.37,
+                    "feedback": 0.31,
+                    "wet": 0
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 0.3
+                },
+                "noteDuration": 0.35,
+                "baseNote": "A7",
+                "sequence": [
+                    1,
+                    0,
+                    1,
+                    0,
+                    1,
+                    1,
+                    0,
+                    1
+                ],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "synth-1744025629918-vvtgy",
+            "config": {
+                "type": "afrz",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.01,
+                    "decay": 0.2,
+                    "sustain": 0.3,
+                    "release": 0.2
+                },
+                "volume": -30,
+                "muted": false,
+                "pitch": 5,
+                "delay": {
+                    "time": 0,
+                    "feedback": 0,
+                    "wet": 0
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 0.3
+                },
+                "noteDuration": 0.5,
+                "baseNote": "A4",
+                "sequence": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "synth-1744025629918-pbxfq",
+            "config": {
+                "type": "stpf",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "triangle"
+                },
+                "envelope": {
+                    "attack": 0.01,
+                    "decay": 0.2,
+                    "sustain": 0.3,
+                    "release": 0.2
+                },
+                "volume": -30,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0,
+                    "feedback": 0,
+                    "wet": 0
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 0.3
+                },
+                "noteDuration": 0.5,
+                "baseNote": "A4",
+                "sequence": [
+                    0,
+                    2,
+                    0,
+                    2,
+                    0,
+                    2,
+                    0,
+                    2
+                ],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "synth-1744025629918-q33qw",
+            "config": {
+                "type": "hb",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.01,
+                    "decay": 0.2,
+                    "sustain": 0.3,
+                    "release": 0.2,
+                    "reverb": 5.1
+                },
+                "volume": -7.5,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.44,
+                    "feedback": 0.38,
+                    "wet": 0.1
+                },
+                "reverb": {
+                    "decay": 5.1,
+                    "wet": 0.3
+                },
+                "noteDuration": 0.4,
+                "baseNote": "C3",
+                "sequence": [
+                    -5,
+                    0,
+                    -5,
+                    0,
+                    -5,
+                    0,
+                    -5,
+                    -5
+                ],
+                "currentStepIndex": 0
+            }
+        }
+    ]
+}

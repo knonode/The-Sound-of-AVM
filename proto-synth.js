@@ -1,4 +1,3 @@
-// At the top of proto-synth.js
 import AlgorandAPI from './algorand-direct.js';
 
 // Tone.js synth setup
@@ -6,33 +5,38 @@ let synthsInitialized = false;
 let isPlaying = false;
 let transactionCount = 0;
 let txTypeCounts = {};
-let initialPresets = {}; 
+let persistentTotalTxs = 0;
+let persistentTotalBlocks = 0;
+let lastProcessedRound = null; 
+let apiMode = 'nodely'; 
 
-// <<< NEW: Array to hold individual synth instance states >>>
-let activeSynths = []; 
+let masterEQ, masterCompressor, masterLimiter;
+let isMasterMuted = false;
+let masterVolumeBeforeMute = -6.0;
+
+let activeSynths = [];
 
 // Define the chromatic scale for cycling
 const chromaticScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const defaultOctave = 4;
 
-// <<< NEW: Function to get default settings for a NEW synth instance's Tone.js aspects >>>
 function getDefaultInstanceSettings() {
     return {
         oscillator: { type: 'sine' },
         envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.2 },
         volume: -30,
         muted: false,
+        savedVolume: null, 
+        mutedByMaster: false, 
         pitch: 0,
         delay: { time: 0, feedback: 0, wet: 0 },
         reverb: { decay: 1.5, wet: 0.3 },
-        // <<< ADDED: LFO Default Settings >>>
         lfo: {
             rate: 5, // Hz
             depth: 0, // 0-100 scale, initially off
             waveform: 'sine',
             destination: 'none' // 'none', 'pitch', 'volume', 'delayTime'
         },
-        // <<< END ADDITION >>>
         noteDuration: 0.1,
         baseNote: `A${defaultOctave}`,
         sequence: [0, 0, 0, 0, 0, 0, 0, 0], 
@@ -40,7 +44,6 @@ function getDefaultInstanceSettings() {
     };
 }
 
-// <<< NEW: Hardcoded Granularity Rules >>>
 const granularityRules = {
   pay: [
     { subtype: 'amount', field: 'amt', params: ['min', 'max'], description: 'Amount range' },
@@ -79,13 +82,19 @@ const granularityRules = {
   ],
   hb: [
       { subtype: 'heartbeat', field: null, params: [], description: 'Heartbeat' }
+  ],
+  reward: [
+    { subtype: 'proposer', field: 'rcv', params: ['address'], description: 'Block proposer address' },
+    { subtype: 'amount', field: 'amt', params: ['min', 'max'], description: 'Reward amount range' }
+  ],
+  block: [
+    // Remove the subtypes - leave empty array or just one simple option
   ]
 };
 // Get main types for easy access
 const mainTxTypes = Object.keys(granularityRules);
 
 
-// --- MODIFIED: Helper to initialize or reset type counts (using mainTxTypes) ---
 function initializeTypeCounts() {
     txTypeCounts = {}; // Reset
     mainTxTypes.forEach(type => { 
@@ -94,7 +103,6 @@ function initializeTypeCounts() {
     updateTypeCountsDisplay(); 
 }
 
-// <<< ADDED BACK: Function to Update Type Counts Display >>>
 function updateTypeCountsDisplay() {
     const container = document.getElementById('type-counts-container');
     if (!container) {
@@ -121,7 +129,6 @@ const svgIconMuted = `<svg viewBox="0 0 24 24" fill="currentColor" width="1em" h
   <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
 </svg>`;
 
-// <<< MODIFIED: createSynthHTML generates full UI for an instance >>>
 const createSynthHTML = (synthInstance) => {
     const settings = { ...getDefaultInstanceSettings(), ...(synthInstance.settings || {}) };
     const config = synthInstance.config || { type: null, subtype: null, parameters: {} };
@@ -161,7 +168,7 @@ const createSynthHTML = (synthInstance) => {
     // --- Generate Parameter Area HTML --- 
     const parameterAreaHTML = `<div class="parameter-area" id="params-${uniqueId}"></div>`;
 
-    // --- Generate Tone.js Controls HTML (NO CURLY BRACE COMMENTS) --- 
+    // --- Generate Tone.js Controls HTML --- 
     const controlsHTML = `
         <!-- Volume Section -->
         <div class="volume-section"> 
@@ -234,10 +241,14 @@ const createSynthHTML = (synthInstance) => {
             </div>
         </div>
       
-        <!-- Effect Controls Section -->
-        <div class="effect-controls">
+        <!-- Pitch Section (NEW) -->
+        <div class="pitch-section">
             <div class="control-row"> <span class="control-label">Pitch: <span id="${uniqueId}-pitch-value">${settings.pitch}</span></span> </div>
             <div class="control-row"> <input type="range" id="${uniqueId}-pitch" min="-12" max="12" step="1" value="${settings.pitch}" data-instance-id="${uniqueId}"> </div>
+        </div>
+        
+        <!-- Delay Section (was Effect Controls) -->
+        <div class="delay-section">
             <div class="control-row"> <span class="control-label">Delay Time: <span id="${uniqueId}-delay-time-value">${settings.delay.time.toFixed(2)}s</span></span> </div>
             <div class="control-row"> <input type="range" id="${uniqueId}-delay-time" min="0" max="1" step="0.01" value="${settings.delay.time}" data-instance-id="${uniqueId}"> </div>
             <div class="control-row"> <span class="control-label">Feedback: <span id="${uniqueId}-delay-feedback-value">${settings.delay.feedback.toFixed(2)}</span></span> </div>
@@ -295,14 +306,97 @@ const createSynthHTML = (synthInstance) => {
     return htmlString;
 };
 
+// <<< NEW: Function to generate the HTML for the Master Synth controller >>>
+const createMasterSynthHTML = () => {
+    const uniqueId = 'master'; // A fixed ID for the master controls
+
+    const headerHTML = `
+        <div class="synth-header">
+            <select class="type-select" disabled><option>MASTER</option></select>
+            <select class="subtype-select" disabled><option>FX</option></select>
+            <button class="mute-btn" data-instance-id="${uniqueId}" title="Mute/Unmute All">${svgIconUnmuted}</button>
+            <button class="close-btn" data-instance-id="${uniqueId}" title="Master cannot be removed" disabled>×</button>
+        </div>
+    `;
+
+    const parameterAreaHTML = `<div class="parameter-area" id="params-${uniqueId}"></div>`;
+
+    const controlsHTML = `
+        <!-- Master Volume Section -->
+        <div class="volume-section"> 
+            <div class="control-row">
+                <span class="control-label">Master Volume: <span id="${uniqueId}-volume-value">-6.0 dB</span></span>
+            </div>
+            <div class="control-row">
+                <input type="range" id="${uniqueId}-volume" min="-60" max="6" step="0.5" value="-6.0" data-instance-id="${uniqueId}">
+            </div>
+        </div>
+
+        <!-- Compressor Section -->
+        <div class="compressor-section">
+            <span class="control-label">Compressor</span>
+            <div class="control-row"><span class="control-label">Threshold: <span id="${uniqueId}-comp-thresh-val">-24 dB</span></span></div>
+            <div class="control-row"><input type="range" id="${uniqueId}-comp-thresh" min="-60" max="0" value="-24" data-instance-id="${uniqueId}"></div>
+            <div class="control-row"><span class="control-label">Ratio: <span id="${uniqueId}-comp-ratio-val">4:1</span></span></div>
+            <div class="control-row"><input type="range" id="${uniqueId}-comp-ratio" min="1" max="20" value="4" data-instance-id="${uniqueId}"></div>
+        </div>
+
+        <!-- 3-Band EQ Section -->
+        <div class="eq-section">
+            <span class="control-label">3-Band EQ</span>
+            <div class="control-row"><span class="control-label">Low: <span id="${uniqueId}-eq-low-val">0 dB</span></span></div>
+            <div class="control-row"><input type="range" id="${uniqueId}-eq-low" min="-12" max="12" value="0" data-instance-id="${uniqueId}"></div>
+            <div class="control-row"><span class="control-label">Mid: <span id="${uniqueId}-eq-mid-val">0 dB</span></span></div>
+            <div class="control-row"><input type="range" id="${uniqueId}-eq-mid" min="-12" max="12" value="0" data-instance-id="${uniqueId}"></div>
+            <div class="control-row"><span class="control-label">High: <span id="${uniqueId}-eq-high-val">0 dB</span></span></div>
+            <div class="control-row"><input type="range" id="${uniqueId}-eq-high" min="-12" max="12" value="0" data-instance-id="${uniqueId}"></div>
+        </div>
+
+        <!-- Limiter Section -->
+        <div class="limiter-section">
+            <span class="control-label">Limiter</span>
+            <div class="control-row"><span class="control-label">Threshold: <span id="${uniqueId}-limit-thresh-val">-0.1 dB</span></span></div>
+            <div class="control-row"><input type="range" id="${uniqueId}-limit-thresh" min="-24" max="0" step="0.1" value="-0.1" data-instance-id="${uniqueId}"></div>
+        </div>
+    `;
+
+    const fullHTML = `
+        <div class="mini-synth master-synth" data-instance-id="${uniqueId}">
+            ${headerHTML}
+            ${parameterAreaHTML}
+            ${controlsHTML}
+        </div>
+    `;
+    return fullHTML;
+};
+
 // <<< MODIFIED: initAudio creates Tone objects per instance >>>
 const initAudio = async () => {
   if (synthsInitialized) return; // Prevent re-running if already initialized globally
   
   console.log('Attempting Global Audio Initialization...');
   try {
-  await Tone.start();
+    await Tone.start();
       console.log('Global Audio context started');
+
+      // <<< NEW: Initialize Master FX Chain >>>
+      masterEQ = new Tone.EQ3({ low: 0, mid: 0, high: 0 });
+      masterCompressor = new Tone.Compressor({ threshold: -24, ratio: 4 });
+      masterLimiter = new Tone.Limiter(-0.1);
+      
+      // Connect the master chain: EQ -> Compressor -> Limiter -> Final Output
+      masterEQ.connect(masterCompressor);
+      masterCompressor.connect(masterLimiter);
+      masterLimiter.toDestination(); // Final connection to speakers
+      
+      // Set initial master volume
+      if (Tone.Destination.volume) {
+          Tone.Destination.volume.value = masterVolumeBeforeMute;
+      }
+
+      console.log('Master FX chain initialized.');
+      // <<< END NEW >>>
+
       synthsInitialized = true;
       updateStatus('Audio ready');
   } catch (error) {
@@ -346,7 +440,7 @@ async function initializeToneForInstance(instanceId) {
         const reverb = new Tone.Reverb({
             decay: settings.reverb.decay,
             wet: settings.reverb.wet
-        }).toDestination();
+        }); // REMOVED .toDestination()
 
         await reverb.generate(); // Pre-generate reverb impulse response
 
@@ -366,9 +460,14 @@ async function initializeToneForInstance(instanceId) {
         }).start();
         // <<< END ADDITION >>>
 
-        // Chain: Synth -> Delay -> Reverb -> Master Output
+        // Chain: Synth -> Delay -> Reverb -> Master Bus -> Master Output
         synth.connect(delay);
         delay.connect(reverb);
+        if (masterEQ) {
+            reverb.connect(masterEQ); // Connect to the start of the master FX chain
+        } else {
+            reverb.toDestination(); // Fallback connection
+        }
     
         // Store references on the instance
         instance.toneObjects = { synth, delay, reverb, lfo }; // <<< Added lfo >>>
@@ -377,13 +476,22 @@ async function initializeToneForInstance(instanceId) {
         // <<< ADDED: Connect LFO based on initial settings >>>
         connectLFO(instance);
 
+        // <<< NEW: Handle case where synth is created while master mute is active >>>
+        if (isMasterMuted && !instance.settings.muted) {
+            console.log(`New synth ${instanceId} created while master mute is active - applying master mute`);
+            instance.settings.mutedByMaster = true;
+            muteSynthVolume(instance);
+            updateSynthMuteButton(instance.id, true);
+        }
+        // <<< END NEW >>>
+
     } catch (error) {
         console.error(`Failed to initialize Tone.js objects for instance ${instanceId}:`, error);
         instance.toneObjects = null; 
     }
 }
 
-// <<< MODIFIED: disposeSynth uses instanceId and disposes instance's toneObjects >>>
+// <<< disposeSynth uses instanceId and disposes instance's toneObjects >>>
 function disposeSynth(instanceId) {
     const instance = findInstance(instanceId);
     if (!instance || !instance.toneObjects) {
@@ -404,8 +512,8 @@ function disposeSynth(instanceId) {
     instance.toneObjects = null; // Clear the reference after disposal
 }
 
-// <<< REWRITTEN: startTransactionStream uses new instance logic >>>
 const startTransactionStream = async () => {
+
   if (!synthsInitialized) {
       console.log("Audio not initialized, attempting init...");
       await initAudio();
@@ -425,6 +533,7 @@ const startTransactionStream = async () => {
   // Reset counters
   transactionCount = 0;
   initializeTypeCounts(); 
+  lastProcessedRound = null; 
   // Reset sequence indices for all instances
   activeSynths.forEach(inst => inst.settings.currentStepIndex = 0);
 
@@ -449,17 +558,31 @@ const startTransactionStream = async () => {
     // --- Core Matching Logic --- 
     const mainType = txType.split('-')[0]; // Get base type (e.g., 'pay', 'axfer')
     
-    // --- Update Global Counts --- 
-      transactionCount++;
-      const totalCountEl = document.getElementById('transaction-count');
-      if (totalCountEl) totalCountEl.textContent = `${transactionCount} transactions processed`;
+    // --- Update All Counters --- 
+    
+    // 1. Session-based counters
+    transactionCount++;
     if (txTypeCounts.hasOwnProperty(mainType)) {
         txTypeCounts[mainType]++;
       } else {
         txTypeCounts[mainType] = 1; // Count even if no synth is configured
       }
-      updateTypeCountsDisplay();
-      // --- End Count Update ---
+
+    // 2. Persistent counters
+    if (mainType === 'block') {
+        persistentTotalBlocks++;
+        localStorage.setItem('persistentTotalBlocks', persistentTotalBlocks.toString());
+    } else {
+        // Assume anything that isn't a 'block' event is a transaction
+        persistentTotalTxs++;
+        localStorage.setItem('persistentTotalTxs', persistentTotalTxs.toString());
+    }
+
+    // --- Update All UI Displays ---
+    const totalCountEl = document.getElementById('transaction-count');
+    if (totalCountEl) totalCountEl.textContent = `${transactionCount} transactions processed`;
+    updateTypeCountsDisplay();
+    updatePersistentCountersDisplay();
 
     // --- NEW Prioritized Matching Logic ---
     let potentialMatches = activeSynths.filter(instance => instance.config.type === mainType);
@@ -508,26 +631,10 @@ const startTransactionStream = async () => {
             }
         });
     }
-    // --- END NEW Prioritized Matching Logic ---
-
-    /* --- OLD LOGIC (Replaced) ---
-    const oldMatchingInstances = activeSynths.filter(instance => {
-        if (!instance.config.type || instance.config.type !== mainType) return false;
-        if (!instance.config.subtype) return true; 
-        return checkTransactionMatch(instance.config, txData);
-    });
-    if (oldMatchingInstances.length > 0) {
-        console.log(`(Old Logic) TX ${txType} matched ${oldMatchingInstances.length} instances.`);
-        oldMatchingInstances.forEach((instance, matchIndex) => { 
-             // playTransactionSound(instance, matchIndex * 0.010); 
-         });
-    }
-    */
 
    }, 50); // Polling interval
 };
 
-// <<< REWRITTEN: stopTransactionStream remains simple >>>
 const stopTransactionStream = () => {
   isPlaying = false;
   AlgorandAPI.stopPolling();
@@ -537,19 +644,22 @@ const stopTransactionStream = () => {
   document.querySelectorAll('.seq-indicator.active').forEach(ind => ind.classList.remove('active'));
 };
 
-// <<< NEW: Helper function to check if a transaction matches instance config >>>
+// <<< Helper function to check if a transaction matches instance config >>>
 function checkTransactionMatch(config, txData) {
     const { type, subtype, parameters } = config;
+    
+    // Handle block type specially - no subtype needed
+    if (type === 'block') {
+        return true; // Any block transaction triggers this
+    }
+    
     const rule = granularityRules[type]?.find(r => r.subtype === subtype);
 
-    if (!rule) return false; // No rule found for this subtype
+    if (!rule) return false;
 
     // Ensure we have the transaction details, often nested under 'txn'
     const txn = txData?.txn ?? txData; // Handle both potential structures
 
-    // TODO: Implement specific matching logic based on subtype and parameters
-    // This needs to look into txData structure based on Algorand specs
-    // Examples:
     switch (`${type}-${subtype}`) {
         case 'pay-amount':
              // ... existing pay-amount logic using txn ...
@@ -563,7 +673,28 @@ function checkTransactionMatch(config, txData) {
         case 'pay-sender':
             // ... existing pay-sender logic using txn ...
             const snd = txn?.snd ?? null;
-            return snd === parameters.address;
+            const targetAddress = parameters.address;
+            
+            // Enhanced debugging for pay-sender
+            console.log('🔍 PAY-SENDER DEBUG:', {
+                fullTxData: txData,
+                txnObject: txn,
+                senderFromTxn: snd,
+                targetAddress: targetAddress,
+                parametersObject: parameters,
+                configObject: config,
+                exactMatch: snd === targetAddress,
+                senderExists: snd !== null && snd !== undefined,
+                targetExists: targetAddress !== null && targetAddress !== undefined && targetAddress !== '',
+                senderLength: snd?.length,
+                targetLength: targetAddress?.length,
+                senderType: typeof snd,
+                targetType: typeof targetAddress
+            });
+            
+            const result = snd === targetAddress;
+            console.log(`PAY-SENDER RESULT: ${result} (${snd} === ${targetAddress})`);
+            return result;
         case 'pay-receiver':
             // ... existing pay-receiver logic using txn ...
             const rcv = txn?.rcv ?? null;
@@ -653,10 +784,9 @@ function checkTransactionMatch(config, txData) {
             console.warn(`Matching logic not implemented for ${type}-${subtype}`);
             return false;
     }
-
 }
 
-// <<< REWRITTEN: playTransactionSound uses instance data >>>
+// <<< playTransactionSound uses instance data >>>
 const playTransactionSound = (instance, timeOffset = 0) => {
   const { id, settings, toneObjects } = instance;
 
@@ -764,239 +894,229 @@ document.querySelectorAll('input[id$="-note-duration"]').forEach(input => {
   });
 });
 
-// <<< Function to load presets from JSON file >>>
-async function loadInitialPresets() {
-  try {
-    const response = await fetch('presets.json'); // Correct path
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+// <<< Function to load a preset from a file or URL >>>
+async function loadPresetFromSource(source) {
+    let presetData;
+    let presetName = '';
+
+    try {
+        if (typeof source === 'string') { // It's a URL
+            presetName = source.split('/').pop(); // Get filename
+            
+            // <<< MODIFICATION FOR DIAGNOSIS >>>
+            // Add cache-busting parameter and fetch as text first to see the raw response.
+            const url = `${source}?t=${Date.now()}`;
+            console.log(`Fetching preset from URL: ${url}`);
+            const response = await fetch(url);
+            
+            const textContent = await response.text();
+            console.log(`--- RAW CONTENT from ${source} ---`);
+            console.log(textContent);
+            console.log(`--- END RAW CONTENT ---`);
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}. Response body logged above.`);
+
+            presetData = JSON.parse(textContent); // Now parse the verified text
+
+        } else if (source instanceof File) { // It's a File object from input
+            presetName = source.name;
+            const text = await source.text();
+            presetData = JSON.parse(text);
+        } else {
+            throw new Error('Invalid source for preset loading.');
+        }
+
+        // --- Core Loading Logic ---
+        if (!presetData.activeSynths || !Array.isArray(presetData.activeSynths)) {
+            throw new Error('Preset file is missing "activeSynths" array.');
+        }
+        
+        console.log(`Loading preset: ${presetName}`);
+
+        // Clear Current State - more surgically
+        const regularSynths = activeSynths.filter(s => s.id !== 'master');
+        regularSynths.forEach(instance => disposeSynth(instance.id));
+        activeSynths = activeSynths.filter(s => s.id === 'master');
+        
+        const synthContainer = document.getElementById('synth-container');
+        const regularSynthElements = synthContainer.querySelectorAll('.mini-synth:not(.master-synth)');
+        regularSynthElements.forEach(el => el.remove());
+
+        // Process Loaded Data
+        let targetActiveSynths = presetData.activeSynths.map(loadedInstance => ({
+            ...loadedInstance,
+            settings: {
+                ...getDefaultInstanceSettings(),
+                ...(loadedInstance.settings || {})
+            },
+            toneObjects: null
+        }));
+
+        // Update State and Rebuild UI
+        activeSynths.push(...targetActiveSynths);
+
+        targetActiveSynths.forEach(instance => {
+            synthContainer.innerHTML += createSynthHTML(instance);
+            renderParameterArea(instance.id, instance.config.type, instance.config.subtype);
+        });
+
+        // Initialize Audio for New Instances
+        if (!synthsInitialized) { await initAudio(); }
+        for (const instance of targetActiveSynths) {
+            await initializeToneForInstance(instance.id);
+        }
+
+        updateStatus(`Preset "${presetName}" loaded`);
+        document.getElementById('load-preset-modal').style.display = 'none';
+
+    } catch (error) {
+        console.error(`Failed to load preset from ${presetName}:`, error);
+        alert(`Error loading preset: ${error.message}`);
     }
-    initialPresets = await response.json();
-    console.log("Successfully loaded initial presets from presets.json:", initialPresets);
-  } catch (error) {
-    console.error("Could not load initial presets from presets.json:", error);
-    initialPresets = {}; // Ensure it's an empty object on error
-  }
 }
 
-// <<< REWRITTEN: loadPreset handles migration from old format >>>
-const loadPreset = async () => {
-  const presetList = document.getElementById('preset-list');
-  const presetName = presetList.value;
-  if (!presetName) return;
+// <<< Function to save the current layout from the top bar >>>
+function savePresetLayout() {
+    const nameInput = document.getElementById('new-preset-name');
+    const presetName = nameInput.value.trim();
+    if (!presetName) {
+        alert('Please enter a preset name.');
+        return;
+    }
 
-  let loadedData = null;
-  let presetSource = "";
-  let isOldFormat = false;
+    const downloadToggle = document.getElementById('download-json-toggle');
 
-  // Check initial presets first
-  if (initialPresets[presetName]) {
-      loadedData = initialPresets[presetName];
-      presetSource = "initial file";
-      // Check if the bundled preset itself is old or new format
-      isOldFormat = loadedData.settings && !loadedData.activeSynths; 
-      } else {
-      // Fallback to Local Storage
-      const userPresets = JSON.parse(localStorage.getItem('txSynthPresets') || 'null');
-      if (userPresets && userPresets[presetName]) {
-          loadedData = userPresets[presetName];
-          presetSource = "local storage";
-          // Check if the loaded local preset is old or new format
-          isOldFormat = loadedData.settings && !loadedData.activeSynths;
-      } 
-  }
+    const presetData = {
+        activeSynths: activeSynths.filter(instance => instance.id !== 'master').map(instance => ({
+            id: instance.id,
+            config: instance.config,
+            settings: instance.settings
+        }))
+    };
+    const jsonString = JSON.stringify(presetData, null, 4);
 
-  if (!loadedData) {
-    alert('Preset not found');
-    return;
-  }
+    // Save to Local Storage
+    try {
+        const presets = JSON.parse(localStorage.getItem('txSynthPresets') || '{}');
+        presets[presetName] = presetData;
+        localStorage.setItem('txSynthPresets', JSON.stringify(presets));
+        updateStatus(`Preset "${presetName}" saved to My Presets`);
+    } catch (error) {
+        console.error("Error saving preset to Local Storage:", error);
+        alert("Failed to save preset to Local Storage.");
+    }
+    
+    // Download as JSON file if toggled
+    if (downloadToggle.checked) {
+        try {
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${presetName}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch(error) {
+            console.error("Failed to download preset file:", error);
+            alert("Could not download the file.");
+        }
+    }
 
-  console.log(`Loading preset: ${presetName} (from ${presetSource})`);
-
-  // --- Clear Current State --- 
-  console.log("Clearing current synths and UI...");
-  // Dispose existing Tone objects first
-  activeSynths.forEach(instance => disposeSynth(instance.id));
-  activeSynths = []; // Clear the main state array
-  const synthContainer = document.getElementById('synth-container');
-  synthContainer.innerHTML = ''; // Clear UI
-  // synthsInitialized remains true if context was started
-
-  // --- Process Loaded Data (Migrate if necessary) --- 
-  let targetActiveSynths = [];
-  if (isOldFormat) {
-      console.warn(`Preset '${presetName}' is in old format. Migrating... Granularity will be lost.`);
-      // Attempt migration from old { settings: { pay: {...}, axfer: {...} } } structure
-      if (loadedData.settings && typeof loadedData.settings === 'object') {
-            // Use displayedSynths order if available, otherwise just iterate settings keys
-            const typesToLoad = loadedData.displayedSynths || Object.keys(loadedData.settings);
-            
-            typesToLoad.forEach(type => {
-                if (loadedData.settings[type]) { // Check if settings for this type exist
-                    const oldSettings = loadedData.settings[type];
-                    const uniqueId = `synth-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-                    const newInstance = {
-                        id: uniqueId,
-                        config: { type: type, subtype: null, parameters: {} }, // Basic config
-                        settings: { // Merge old settings into defaults
-                             ...getDefaultInstanceSettings(), // Start with defaults
-                             ...oldSettings // Overwrite with saved values
-                             // Ensure nested objects are handled if necessary (defaults cover it)
-                        },
-                        toneObjects: null
-                    };
-                    targetActiveSynths.push(newInstance);
-      } else {
-                     console.warn(`Type "${type}" listed in old preset but settings missing.`);
-                }
-            });
-      } else {
-          alert(`Failed to migrate old preset format for '${presetName}'. Invalid structure.`);
-          return;
-      }
-  } else if (loadedData.activeSynths && Array.isArray(loadedData.activeSynths)) {
-      // New format: Load directly
-      console.log("Loading preset in new format.");
-      // Deep copy might be safer if objects are complex, but direct assign is ok for now
-      // We need to ensure each loaded instance has default settings applied correctly if partial
-       targetActiveSynths = loadedData.activeSynths.map(loadedInstance => ({ 
-            ...loadedInstance, // Spread loaded data (id, config)
-            settings: { // Ensure settings are complete
-                 ...getDefaultInstanceSettings(), 
-                 ...(loadedInstance.settings || {})
-            },
-            toneObjects: null // Tone objects always start as null when loading
-        }));
-  } else {
-       alert(`Preset '${presetName}' has an unrecognized format.`);
-       return;
-  }
-
-   // --- Update State and Rebuild UI --- 
-  activeSynths = targetActiveSynths; // Set the global state
-  console.log("Applied loaded/migrated settings. Active Synths:", activeSynths);
-
-  console.log("Rebuilding UI...");
-  activeSynths.forEach(instance => {
-      synthContainer.innerHTML += createSynthHTML(instance);
-      // Render parameter area based on loaded config
-      renderParameterArea(instance.id, instance.config.type, instance.config.subtype);
-  });
-
-  // --- Initialize Audio for New Instances --- 
-  console.log("Initializing audio objects for loaded synths...");
-  // Ensure global context is running first
-  if (!synthsInitialized) { await initAudio(); } 
-  // Initialize Tone for each loaded instance
-  for (const instance of activeSynths) {
-      await initializeToneForInstance(instance.id);
-  }
-
-  // --- Update Other UI --- 
-  // initializeEventListeners(); // Delegated listeners are already attached
-  // updateAllValueDisplays(); // TODO: Implement this later
-  // updateAllSequencerDisplays(); // TODO: Implement this later
-  console.log(`Preset "${presetName}" loaded successfully.`);
-  updateStatus(`Preset "${presetName}" loaded`);
-  // Optionally clear status after a delay
-  // setTimeout(() => updateStatus('Streaming...'), 2000); 
-};
-
-// <<< REWRITTEN: savePreset uses new instance structure >>>
-const savePreset = () => {
-  const presetName = document.getElementById('preset-name').value.trim();
-  if (!presetName) {
-    alert('Please enter a preset name');
-    return;
-  }
-
-  // Create the preset object in the NEW format
-  const presetData = {
-    // Store the current state of the activeSynths array
-    // We only need to save config and settings, not toneObjects
-    activeSynths: activeSynths.map(instance => ({
-        id: instance.id, // Keep ID for potential future use?
-        config: instance.config,
-        settings: instance.settings
-    }))
-  };
-
-  console.log(`Saving preset '${presetName}' with data:`, presetData);
-
-  // Save to Local Storage
-  const presets = JSON.parse(localStorage.getItem('txSynthPresets') || '{}');
-  presets[presetName] = presetData; // Save the new structure
-  try {
-      localStorage.setItem('txSynthPresets', JSON.stringify(presets));
-      updatePresetList(); // Update dropdown
-      console.log(`Preset "${presetName}" saved successfully to Local Storage.`);
-      updateStatus(`Preset "${presetName}" saved`);
-  } catch (error) {
-      console.error("Error saving preset to Local Storage:", error);
-      alert("Failed to save preset. Local Storage might be full or disabled.");
-  }
-};
-
-// Update the preset dropdown list
-const updatePresetList = () => {
-  const presetList = document.getElementById('preset-list');
-  presetList.innerHTML = '<option value="">Select a preset</option>'; // Clear existing options
-
-  // --- ADDED: Optgroup for Initial Presets ---
-  const initialGroup = document.createElement('optgroup');
-  initialGroup.label = "Bundled Presets";
-  let hasInitialPresets = false;
-  for (const name in initialPresets) {
-    const option = document.createElement('option');
-    option.value = name;
-    option.textContent = name;
-    initialGroup.appendChild(option);
-    hasInitialPresets = true;
-  }
-  if (hasInitialPresets) {
-      presetList.appendChild(initialGroup);
-  }
-  // --- END ADDITION ---
-
-  // --- MODIFIED: Optgroup for User Presets ---
-  const userPresets = JSON.parse(localStorage.getItem('txSynthPresets') || 'null'); // Check null
-  if (userPresets && Object.keys(userPresets).length > 0) { // Check userPresets is not null
-      const userGroup = document.createElement('optgroup');
-      userGroup.label = "My Presets";
-      for (const name in userPresets) {
-    const option = document.createElement('option');
-    option.value = name;
-    option.textContent = name;
-        userGroup.appendChild(option);
-  }
-      presetList.appendChild(userGroup);
-  }
-  // --- END MODIFICATION ---
-};
+    document.getElementById('save-preset-modal').style.display = 'none';
+    nameInput.value = '';
+    downloadToggle.checked = false;
+}
 
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => { 
+  // --- NEW: DIAGNOSTIC STARTUP CHECK ---
+  // We will check for each required element individually and report exactly which one is missing.
+  const requiredIds = [
+      'synth-container', 'add-synth', 'start-btn', 'stop-btn', 
+      'save-preset', 'load-preset', 'save-preset-modal', 'load-preset-modal',
+      'modal-preset-buttons', 'save-modal-close', 'load-modal-close',
+      'save-new-preset-btn', 'preset-file-input',
+      'toggle-aggr-btn', 'toggle-api-btn', 'api-token-modal', 
+      'token-modal-close', 'api-token-input', 'save-api-token-btn'
+  ];
+  let missingElement = false;
+  requiredIds.forEach(id => {
+      if (!document.getElementById(id)) {
+          console.error(`Startup failed: Essential UI element with ID '${id}' not found!`);
+          missingElement = true;
+      }
+  });
+  if (missingElement) { return; }
+
+  // --- Get references to all UI elements ---
   const synthContainer = document.getElementById('synth-container');
   const addSynthButton = document.getElementById('add-synth');
   const startBtn = document.getElementById('start-btn');
   const stopBtn = document.getElementById('stop-btn');
-  const savePresetNameBtn = document.getElementById('save-preset-name');
-  const presetListSelect = document.getElementById('preset-list'); 
-  // Remove reference/listener for top bar #load-preset if it exists
+  const savePresetTopBtn = document.getElementById('save-preset');
+  const loadPresetTopBtn = document.getElementById('load-preset');
+  const saveModal = document.getElementById('save-preset-modal');
+  const loadModal = document.getElementById('load-preset-modal');
+  const modalPresetButtons = document.getElementById('modal-preset-buttons');
+  const saveModalClose = document.getElementById('save-modal-close');
+  const loadModalClose = document.getElementById('load-modal-close');
+  const saveNewPresetBtn = document.getElementById('save-new-preset-btn');
+  const presetFileInput = document.getElementById('preset-file-input');
+  const toggleAggrBtn = document.getElementById('toggle-aggr-btn');
+  const toggleApiBtn = document.getElementById('toggle-api-btn');
+  const apiTokenModal = document.getElementById('api-token-modal');
+  const tokenModalClose = document.getElementById('token-modal-close');
+  const apiTokenInput = document.getElementById('api-token-input');
+  const saveApiTokenBtn = document.getElementById('save-api-token-btn');
 
-  if (!synthContainer || !addSynthButton || !startBtn || !stopBtn || !savePresetNameBtn || !presetListSelect) {
-      console.error("One or more essential UI elements not found!");
-      return; 
+  // <<< ADDED MISSING FUNCTION DEFINITION HERE >>>
+  function populateLoadModal() {
+      const container = document.getElementById('modal-preset-buttons');
+      container.innerHTML = ''; // Clear previous buttons
+
+      // Add buttons for server presets
+      ['max-pain.json', 'vanilla.json', 'block-anxiety.json'].forEach(name => {
+        const button = document.createElement('button');
+        button.textContent = name.replace('.json', '');
+        button.dataset.fileName = name;
+        container.appendChild(button);
+      });
+      
+      // Add buttons for user presets from localStorage
+      const userPresets = JSON.parse(localStorage.getItem('txSynthPresets') || '{}');
+      const presetNames = Object.keys(userPresets);
+      if (presetNames.length > 0) {
+          presetNames.forEach(name => {
+              const button = document.createElement('button');
+              button.textContent = name;
+              button.dataset.presetName = name;
+              container.appendChild(button);
+          });
+      }
   }
 
-  await loadInitialPresets(); 
-  await initAudio(); // <<< Initialize global audio context FIRST >>>
+  await initAudio();
 
-  // Start empty or load default preset later
+  // Start empty, then add Master
   activeSynths = []; 
   synthContainer.innerHTML = ''; 
+
+  // Create and add the master synth
+  const masterSynthHTML = createMasterSynthHTML();
+  synthContainer.innerHTML += masterSynthHTML;
   
-  addSynthButton.addEventListener('click', async () => { // <<< Made async >>>
+  // Add a placeholder for the master synth in the active synths array
+  // This allows it to be found/excluded by other functions without needing full settings.
+  activeSynths.push({
+      id: 'master',
+      config: {},
+      settings: {},
+      toneObjects: null // Master FX chain will be handled separately
+  });
+  
+  addSynthButton.addEventListener('click', async () => {
     const uniqueId = `synth-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const newInstance = {
         id: uniqueId,
@@ -1010,31 +1130,136 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newSynthHTML = createSynthHTML(newInstance);
     synthContainer.insertAdjacentHTML('beforeend', newSynthHTML);
 
-    // Initialize Tone.js objects for the newly added synth
     await initializeToneForInstance(uniqueId); 
-
-    // Render initial parameter area (which will be empty or based on default subtype if any)
     renderParameterArea(uniqueId, null, null); 
-
-    // No need to re-attach listeners due to delegation
   });
   
-  // Attach main control listeners (Start, Stop, Save Preset, Load Preset Dropdown)
+  // Attach main control listeners
   startBtn.addEventListener('click', startTransactionStream); 
   stopBtn.addEventListener('click', stopTransactionStream);
-  savePresetNameBtn.addEventListener('click', savePreset);
-  presetListSelect.addEventListener('change', loadPreset); 
+  
+  // --- MODAL LISTENERS ---
+  loadPresetTopBtn.addEventListener('click', () => {
+      populateLoadModal(); // This will now work
+      loadModal.style.display = 'block';
+  });
+  savePresetTopBtn.addEventListener('click', () => {
+      saveModal.style.display = 'block';
+  });
 
-  // Attach delegated listeners to the container ONCE
+  // Close modals
+  loadModalClose.addEventListener('click', () => { loadModal.style.display = 'none'; });
+  saveModalClose.addEventListener('click', () => { saveModal.style.display = 'none'; });
+  window.addEventListener('click', (event) => {
+      if (event.target == loadModal) loadModal.style.display = 'none';
+      if (event.target == saveModal) saveModal.style.display = 'none';
+  });
+
+  // Listener for buttons inside the load modal
+  modalPresetButtons.addEventListener('click', (event) => {
+      const target = event.target;
+      if (target.tagName !== 'BUTTON') return;
+
+      if (target.dataset.fileName) { // For server presets
+          loadPresetFromSource(target.dataset.fileName);
+      } else if (target.dataset.presetName) { // For user presets from localStorage
+          loadPresetFromLocalStorage(target.dataset.presetName); 
+          loadModal.style.display = 'none';
+      }
+  });
+
+  saveNewPresetBtn.addEventListener('click', savePresetLayout);
+
+  presetFileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+          loadPresetFromSource(file);
+      }
+      event.target.value = null;
+  });
+
   initializeEventListeners(); 
 
-  updatePresetList();
   updateStatus('Ready');
   initializeTypeCounts();
   injectSliderStyles(); 
+  loadPersistentCounters();
+
+  // <<< Event listeners for new toggle buttons >>>
+  toggleAggrBtn.addEventListener('click', () => {
+      const currentState = toggleAggrBtn.textContent;
+      if (currentState === 'Aggr Txs') {
+          toggleAggrBtn.textContent = 'Single Txs';
+      } else {
+          toggleAggrBtn.textContent = 'Aggr Txs';
+      }
+      // Functionality to be added later
+  });
+
+  toggleApiBtn.addEventListener('click', () => {
+      if (apiMode === 'nodely') {
+          // Switching TO user node
+          apiMode = 'user_node';
+          toggleApiBtn.textContent = 'Your Node';
+          
+          const storedToken = localStorage.getItem('userAlgodToken');
+          if (storedToken) {
+              console.log("Using stored Algorand API token.");
+              AlgorandAPI.setApiToken(storedToken);  // ✅ This calls the function
+          } else {
+              apiTokenModal.style.display = 'block'; // Show modal to get token
+          }
+      } else {
+          // Switching TO Nodely
+          apiMode = 'nodely';
+          toggleApiBtn.textContent = 'Nodely API';
+          console.log("Switched to Nodely API mode. Stopping stream.");
+          if (isPlaying) {
+            stopTransactionStream();
+          }
+      }
+  });
+
+  // Listeners for the API token modal
+  tokenModalClose.addEventListener('click', () => {
+      apiTokenModal.style.display = 'none';
+      // If user closes modal without saving, switch state back to Nodely
+      if (apiMode === 'user_node' && !localStorage.getItem('userAlgodToken')) {
+          apiMode = 'nodely';
+          toggleApiBtn.textContent = 'Nodely API';
+      }
+  });
+  
+  saveApiTokenBtn.addEventListener('click', () => {
+      const userToken = apiTokenInput.value.trim();
+      if (userToken) {
+          localStorage.setItem('userAlgodToken', userToken);
+          AlgorandAPI.setApiToken(userToken);  // ✅ This also calls the function
+          apiTokenModal.style.display = 'none';
+          console.log("User API token saved and applied.");
+      } else {
+          alert("Please enter a valid API token.");
+      }
+  });
+
+  // <<< Set default API mode based on stored token >>>
+  const storedToken = localStorage.getItem('userAlgodToken');
+  if (storedToken) {
+    // User has a token, default to user node
+    apiMode = 'user_node';
+    toggleApiBtn.textContent = 'Your Node';
+    AlgorandAPI.setApiMode('user_node');
+    AlgorandAPI.setApiToken(storedToken);
+  } else {
+    // No token, default to Nodely
+    apiMode = 'nodely';
+    toggleApiBtn.textContent = 'Nodely API';
+    AlgorandAPI.setApiMode('nodely');
+  }
+
 });
 
-// <<< MODIFIED: initializeEventListeners Uses Event Delegation >>>
+// <<< initializeEventListeners Uses Event Delegation >>>
 const initializeEventListeners = () => {
     const synthContainer = document.getElementById('synth-container');
     if (!synthContainer) {
@@ -1117,6 +1342,48 @@ const handleContainerInput = (e) => {
     // Correctly identify control type even with multiple hyphens
     const controlIdentifier = target.id.replace(`${instanceId}-`, ''); // e.g., volume, lfo-rate
 
+    // <<< Handle Master controls separately >>>
+    if (instanceId === 'master') {
+        switch(controlIdentifier) {
+            case 'volume':
+                const masterVol = parseFloat(target.value);
+                Tone.Destination.volume.rampTo(masterVol, 0.02);
+                document.getElementById(`${instanceId}-volume-value`).textContent = `${masterVol.toFixed(1)} dB`;
+                break;
+            case 'comp-thresh':
+                const compThresh = parseFloat(target.value);
+                if (masterCompressor) masterCompressor.threshold.value = compThresh;
+                document.getElementById(`${instanceId}-comp-thresh-val`).textContent = `${compThresh.toFixed(0)} dB`;
+                break;
+            case 'comp-ratio':
+                const compRatio = parseFloat(target.value);
+                if (masterCompressor) masterCompressor.ratio.value = compRatio;
+                document.getElementById(`${instanceId}-comp-ratio-val`).textContent = `${compRatio.toFixed(0)}:1`;
+                break;
+            case 'eq-low':
+                const eqLow = parseFloat(target.value);
+                if (masterEQ) masterEQ.low.value = eqLow;
+                document.getElementById(`${instanceId}-eq-low-val`).textContent = `${eqLow.toFixed(0)} dB`;
+                break;
+            case 'eq-mid':
+                const eqMid = parseFloat(target.value);
+                if (masterEQ) masterEQ.mid.value = eqMid;
+                document.getElementById(`${instanceId}-eq-mid-val`).textContent = `${eqMid.toFixed(0)} dB`;
+                break;
+            case 'eq-high':
+                const eqHigh = parseFloat(target.value);
+                if (masterEQ) masterEQ.high.value = eqHigh;
+                document.getElementById(`${instanceId}-eq-high-val`).textContent = `${eqHigh.toFixed(0)} dB`;
+                break;
+            case 'limit-thresh':
+                const limitThresh = parseFloat(target.value);
+                if (masterLimiter) masterLimiter.threshold.value = limitThresh;
+                document.getElementById(`${instanceId}-limit-thresh-val`).textContent = `${limitThresh.toFixed(1)} dB`;
+                break;
+        }
+        return; // Stop further processing for master controls
+    }
+
     switch(controlIdentifier) {
         case 'volume':
             handleVolumeChangeLogic(instanceId, target.value, target);
@@ -1150,14 +1417,13 @@ const handleContainerInput = (e) => {
          case 'reverb-wet': // Changed from 'wet'
              handleReverbWetChangeLogic(instanceId, target.value, target);
              break;
-        // <<< ADDED: LFO Controls >>>
+        // <<< LFO Controls >>>
         case 'lfo-rate':
             handleLfoRateChangeLogic(instanceId, target.value, target);
             break;
         case 'lfo-depth':
             handleLfoDepthChangeLogic(instanceId, target.value, target);
             break;
-        // <<< END ADDITION >>>
         default:
              // console.log("Unhandled range input:", target.id, controlIdentifier);
              break;
@@ -1168,35 +1434,72 @@ const handleContainerInput = (e) => {
 
 function findInstance(instanceId) {
     const instance = activeSynths.find(s => s.id === instanceId);
-    if (!instance) {
+    if (!instance && instanceId !== 'master') {
         console.warn(`Could not find synth instance ${instanceId}`);
     }
     return instance;
 }
 
 const handleMuteLogic = (instanceId, buttonElement) => {
-    const instance = findInstance(instanceId);
-    if (!instance) return;
-    instance.settings.muted = !instance.settings.muted;
-    buttonElement.innerHTML = instance.settings.muted ? svgIconMuted : svgIconUnmuted; 
-    console.log(`Instance ${instanceId} mute toggled to: ${instance.settings.muted}`);
-    
-    // Update Tone object: Mute/unmute the synth's volume
-    if (instance.toneObjects?.synth?.volume) {
-        const targetVolume = instance.settings.muted ? -Infinity : instance.settings.volume;
-        // Disconnect LFO from volume BEFORE setting to -Infinity if muted
-        if (instance.settings.muted && instance.settings.lfo.destination === 'volume') {
-             try { instance.toneObjects.lfo.disconnect(instance.toneObjects.synth.volume); } catch(e){}
+    // <<< Master Mute Logic with Per-Synth Gain Control >>>
+    if (instanceId === 'master') {
+        isMasterMuted = !isMasterMuted;
+        buttonElement.innerHTML = isMasterMuted ? svgIconMuted : svgIconUnmuted;
+        
+        if (isMasterMuted) {
+            // Master mute ON: mute all regular synths that aren't already user-muted
+            console.log('Master mute ON - muting all non-user-muted synths');
+            getAllRegularSynths().forEach(instance => {
+                if (!instance.settings.muted) { // Only mute synths that aren't already user-muted
+                    instance.settings.mutedByMaster = true;
+                    muteSynthVolume(instance);
+                    updateSynthMuteButton(instance.id, true);
+                }
+            });
+        } else {
+            // Master mute OFF: restore all synths that were muted by master
+            console.log('Master mute OFF - restoring master-muted synths');
+            getAllRegularSynths().forEach(instance => {
+                if (instance.settings.mutedByMaster) {
+                    instance.settings.mutedByMaster = false;
+                    unmuteSynthVolume(instance);
+                    updateSynthMuteButton(instance.id, false);
+                }
+            });
         }
         
-        // Use rampTo for smoother transition, except when unmuting FROM LFO mod
-        // If unmuting and LFO targets volume, connectLFO will handle setting the correct LFO range
-        if (!instance.settings.muted && instance.settings.lfo.destination === 'volume') {
-             connectLFO(instance); // Reconnect LFO which sets min/max correctly
-        } else {
-             // Otherwise, just ramp to the target base volume or -Infinity
-            instance.toneObjects.synth.volume.value = targetVolume; // Set directly might be better for mute/unmute
-            // instance.toneObjects.synth.volume.rampTo(targetVolume, 0.01); // Very short ramp
+        console.log(`Master mute toggled to: ${isMasterMuted}`);
+        return;
+    }
+
+    // <<< Individual synth mute logic >>>
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    
+    // Handle different scenarios based on current state
+    if (isMasterMuted && instance.settings.mutedByMaster) {
+        // Case: Master is muted, and this synth was muted by master
+        // Action: Unmute this synth (override master mute for this synth)
+        instance.settings.mutedByMaster = false;
+        unmuteSynthVolume(instance);
+        buttonElement.innerHTML = svgIconUnmuted;
+        console.log(`Instance ${instanceId} unmuted (override master mute)`);
+    } else if (isMasterMuted && !instance.settings.mutedByMaster && !instance.settings.muted) {
+        // Case: Master is muted, but this synth was manually unmuted
+        // Action: Re-mute this synth by master
+        instance.settings.mutedByMaster = true;
+        muteSynthVolume(instance);
+        buttonElement.innerHTML = svgIconMuted;
+        console.log(`Instance ${instanceId} re-muted by master`);
+    } else {
+        // Case: Normal user mute/unmute (master not engaged or synth has individual mute)
+        instance.settings.muted = !instance.settings.muted;
+        buttonElement.innerHTML = instance.settings.muted ? svgIconMuted : svgIconUnmuted;
+        console.log(`Instance ${instanceId} user mute toggled to: ${instance.settings.muted}`);
+        
+        // Update Tone object for user mute/unmute
+        if (!instance.settings.muted && !instance.settings.mutedByMaster && instance.toneObjects?.synth?.volume) {
+            instance.toneObjects.synth.volume.rampTo(instance.settings.volume, 0.02); // Short ramp
         }
     }
 };
@@ -1468,11 +1771,10 @@ const handleBaseNoteChangeLogic = (instanceId, direction) => {
     if (displayEl) displayEl.textContent = newBaseNote;
     // console.log(`Instance ${instanceId} base note changed to: ${newBaseNote}`);
 
-    // <<< ADDED: Update LFO if targeting pitch >>>
+    // <<< Update LFO if targeting pitch >>>
     if (instance.settings.lfo.destination === 'pitch') {
         connectLFO(instance);
     }
-    // <<< END ADDITION >>>
 };
 
 const handleOctaveChangeLogic = (instanceId, direction) => {
@@ -1495,11 +1797,10 @@ const handleOctaveChangeLogic = (instanceId, direction) => {
             if (displayEl) displayEl.textContent = newBaseNote;
             // console.log(`Instance ${instanceId} octave changed to: ${newOctave}`);
 
-            // <<< ADDED: Update LFO if targeting pitch >>>
+            // <<< Update LFO if targeting pitch >>>
             if (instance.settings.lfo.destination === 'pitch') {
                 connectLFO(instance);
             }
-            // <<< END ADDITION >>>
         }
     } else {
          console.error(`Cannot parse base note for octave change: ${currentNoteWithOctave}`);
@@ -1523,7 +1824,7 @@ function updateSubtypeDropdown(instanceId, selectedType) {
     }
 }
 
-// <<< MODIFIED: renderParameterArea handles keyreg toggle better AND adds Label >>>
+// <<< renderParameterArea handles keyreg toggle better AND adds Label >>>
 function renderParameterArea(instanceId, type, subtype) {
     const paramArea = document.getElementById(`params-${instanceId}`);
     if (!paramArea) return;
@@ -1609,38 +1910,6 @@ function renderParameterArea(instanceId, type, subtype) {
     paramArea.innerHTML = paramHTML;
 }
 
-// <<< Remove or comment out old individual handlers >>>
-/*
-const handleMuteClick = (e) => { ... }; // Now handleMuteLogic
-const handleCloseClick = (e) => { ... }; // Now handleCloseLogic
-const handleEnvelopeChange = (e) => { ... }; // Now handleEnvelopeChangeLogic
-const handleWaveformChange = (e) => { ... }; // Now handleWaveformChangeLogic
-const handlePitchChange = (e) => { ... }; // Now handlePitchChangeLogic
-const handleNoteDurationChange = (e) => { ... }; // Now handleNoteDurationChangeLogic
-const handleDelayTimeChange = (e) => { ... }; // Now handleDelayTimeChangeLogic
-const handleDelayFeedbackChange = (e) => { ... }; // Now handleDelayFeedbackChangeLogic
-const handleDelayWetChange = (e) => { ... }; // Now handleDelayWetChangeLogic
-const handleReverbDecayChange = (e) => { ... }; // Now handleReverbDecayChangeLogic
-const handleReverbWetChange = (e) => { ... }; // Now handleReverbWetChangeLogic
-const handleBaseNoteDownClick = (e) => { ... }; // Combined into handleBaseNoteChangeLogic
-const handleBaseNoteUpClick = (e) => { ... }; // Combined into handleBaseNoteChangeLogic
-const handleOctaveDownClick = (e) => { ... }; // Combined into handleOctaveChangeLogic
-const handleOctaveUpClick = (e) => { ... }; // Combined into handleOctaveChangeLogic
-const handleVolumeChange = (e) => { ... }; // Now handleVolumeChangeLogic
-const handleSequenceChange = (e) => { ... }; // Now handleSequenceChangeLogic
-*/
-
-// <<< Placeholder/TODO for functions that need rewrite >>>
-const updateAllValueDisplays = () => { /* console.warn("TODO: Implement updateAllValueDisplays"); */ };
-const updateAllSequencerDisplays = () => { /* console.warn("TODO: Implement updateAllSequencerDisplays"); */ };
-/*
-const playTransactionSound = (synthInstance, index = 0) => { }; 
-const initAudio = async () => { };
-const disposeSynth = (instanceId) => { };
-const savePreset = () => { };
-const loadPreset = async () => { };
-*/
-
 // Corrected injectSliderStyles function
 const injectSliderStyles = () => {
     // This function is kept for potential future use,
@@ -1689,7 +1958,7 @@ const injectSliderStyles = () => {
     }
 };
 
-// <<< ADDED: LFO Logic Functions >>>
+// <<< LFO Logic Functions >>>
 
 // Scales a 0-100 depth value to an appropriate modulation range for a target
 function scaleLfoDepth(destination, depthPercent, baseValue) {
@@ -1711,7 +1980,7 @@ function scaleLfoDepth(destination, depthPercent, baseValue) {
             // Modulate delay time. Base is seconds (e.g., 0 to 1).
             // Let's modulate +/- 50% of max delay time (1s)? So +/- 0.5s
             // Or modulate relative to current delay time? Let's try fixed range first.
-            const delayModRangeSec = 0.25; // Modulate by +/- 0.25 seconds
+            const delayModRangeSec = 0.1; // Reduced from 0.25 to 0.1 seconds max
              return delayModRangeSec * depth;
         default:
             return 0; // No modulation
@@ -1721,7 +1990,7 @@ function scaleLfoDepth(destination, depthPercent, baseValue) {
 // Helper function to connect/disconnect LFO based on settings
 function connectLFO(instance) {
     if (!instance?.toneObjects?.lfo || !instance.toneObjects.synth || !instance.toneObjects.delay) {
-        console.warn(`Cannot connect LFO for ${instance.id}, Tone objects not ready.`);
+        console.warn(`LFO DEBUG (${instance.id}): Cannot connect LFO, Tone objects not ready.`);
         return;
     }
 
@@ -1731,64 +2000,107 @@ function connectLFO(instance) {
     const { volume: baseVolume } = instance.settings; // Needed for volume base level
     const { time: baseDelayTime } = instance.settings.delay; // Needed for delay base time
 
+    console.log(`LFO DEBUG (${instance.id}): connectLFO called. Dest: ${destination}, Depth: ${depth}, BaseVol: ${baseVolume}`); // <<< ADDED LOG
+
     // --- Disconnect from all potential targets first ---
+    console.log(`LFO DEBUG (${instance.id}): Attempting to disconnect LFO from previous targets...`); // <<< ADDED LOG
     try {
+         // Simply call disconnect - it's safe if not connected
          lfo.disconnect(synth.oscillator.frequency);
          lfo.disconnect(synth.volume);
          lfo.disconnect(delay.delayTime);
-    } catch (e) { /* Ignore errors if not connected */ }
+         console.log(`LFO DEBUG (${instance.id}): Disconnect successful (or was not connected).`); // <<< MODIFIED LOG
+    } catch (e) {
+        // Log error IF disconnect itself fails for some reason
+        console.error(`LFO DEBUG (${instance.id}): Error during LFO disconnect call:`, e); // <<< MODIFIED LOG
+    }
 
     // --- Set amplitude based on depth (if depth is 0, amplitude is 0) ---
     const scaledModulationAmount = scaleLfoDepth(destination, depth, 0); // Base value isn't strictly needed for range scaling here
-    
+
     // The LFO's amplitude controls the *amount* of modulation.
     // The LFO's min/max determine the *range* it oscillates over relative to the target's base value.
-    lfo.amplitude.value = depth > 0 ? 1 : 0; // LFO active only if depth > 0
+    const targetAmplitude = depth > 0 ? 1 : 0; // <<< RENAMED for clarity
+    console.log(`LFO DEBUG (${instance.id}): Setting LFO amplitude to: ${targetAmplitude}`); // <<< ADDED LOG
+    lfo.amplitude.value = targetAmplitude;
 
     if (depth === 0 || destination === 'none') {
-        console.log(`LFO ${instance.id}: Disconnected or depth is 0.`);
+        console.log(`LFO DEBUG (${instance.id}): LFO inactive (Depth 0 or Dest None). Resetting min/max.`);
         lfo.min = 0; // Reset min/max when inactive
-        lfo.max = 0; 
+        lfo.max = 0;
         return; // Exit if no destination or zero depth
     }
 
     // --- Connect to the new target and set min/max based on scaled depth ---
-    console.log(`LFO ${instance.id}: Connecting to ${destination}, Depth: ${depth}, ScaledMod: ${scaledModulationAmount.toFixed(2)}`);
-    
+    console.log(`LFO DEBUG (${instance.id}): Preparing LFO for ${destination}. ScaledMod: ${scaledModulationAmount.toFixed(2)}`); // <<< MODIFIED LOG
+
+    let targetParam = null;
+    let targetParamName = '';
+    let targetValueBefore;
+
     try {
         switch(destination) {
             case 'pitch':
-                // Target parameter is frequency in Hz
+                targetParam = synth.oscillator.frequency;
+                targetParamName = 'synth.oscillator.frequency';
                 const baseFreq = Tone.Frequency(baseNote).toFrequency();
-                // Modulate frequency directly. Calculate min/max Hz based on cents modulation.
-                 // Convert cents modulation to frequency ratio: ratio = 2^(cents / 1200)
-                 const ratio = Math.pow(2, scaledModulationAmount / 1200);
-                 lfo.min = baseFreq / ratio;
-                 lfo.max = baseFreq * ratio;
-                 lfo.connect(synth.oscillator.frequency);
-                 break;
+                const ratio = Math.pow(2, scaledModulationAmount / 1200);
+                lfo.min = baseFreq / ratio;
+                lfo.max = baseFreq * ratio;
+                break;
             case 'volume':
-                // Target parameter is volume in dB. Modulate around the base volume.
+                targetParam = synth.volume;
+                targetParamName = 'synth.volume';
                 lfo.min = baseVolume - scaledModulationAmount;
-                 lfo.max = baseVolume + scaledModulationAmount;
-                 // Only connect if synth is not muted globally by the mute button!
-                 if (!instance.settings.muted) {
-                     lfo.connect(synth.volume);
-                 }
-                 break;
+                lfo.max = baseVolume + scaledModulationAmount;
+                break;
             case 'delayTime':
-                // Target parameter is delayTime in seconds. Modulate around base delay time.
-                 // Clamp modulation to avoid negative delay time.
-                 lfo.min = Math.max(0.001, baseDelayTime - scaledModulationAmount); // Ensure min is slightly above 0
-                 lfo.max = baseDelayTime + scaledModulationAmount;
-                 lfo.connect(delay.delayTime);
-                 break;
+                targetParam = delay.delayTime;
+                targetParamName = 'delay.delayTime';
+                // <<< SAFER DELAY TIME BOUNDS >>>
+                const safeMinDelay = Math.max(0.01, baseDelayTime * 0.1); // Never below 10ms, and not below 10% of base
+                const safeMaxDelay = Math.min(1.0, baseDelayTime * 3);     // Never above 1s, and not above 3x base
+                lfo.min = Math.max(safeMinDelay, baseDelayTime - (scaledModulationAmount * 0.5)); // Reduce modulation amount
+                lfo.max = Math.min(safeMaxDelay, baseDelayTime + (scaledModulationAmount * 0.5)); // Reduce modulation amount
+                console.log(`LFO DEBUG (${instance.id}): DelayTime bounds - Min: ${lfo.min.toFixed(3)}s, Max: ${lfo.max.toFixed(3)}s, Base: ${baseDelayTime.toFixed(3)}s`);
+                break;
         }
+
+        if (targetParam) {
+            try {
+                targetValueBefore = targetParam.value;
+                console.log(`LFO DEBUG (${instance.id}): Connecting LFO. Target: ${targetParamName}, Min: ${lfo.min.toFixed(4)}, Max: ${lfo.max.toFixed(4)}, Target value BEFORE connect: ${targetValueBefore.toFixed(4)}`); // <<< ADDED LOG
+            } catch (readError) {
+                 console.error(`LFO DEBUG (${instance.id}): Error reading target value BEFORE connect:`, readError);
+                 targetValueBefore = 'Error reading value';
+            }
+
+            // Connect only if valid target and not muted (for volume)
+            if (destination === 'volume' && instance.settings.muted) {
+                console.log(`LFO DEBUG (${instance.id}): Synth muted, skipping LFO connect to volume.`); // <<< ADDED LOG
+            } else {
+                lfo.connect(targetParam);
+                console.log(`LFO DEBUG (${instance.id}): LFO connected to ${targetParamName}.`); // <<< ADDED LOG
+
+                // <<< ADDED LOG: Schedule check of value AFTER connect >>>
+                Tone.Draw.schedule(() => {
+                    try {
+                        const targetValueAfter = targetParam.value;
+                        console.log(`LFO DEBUG (${instance.id}): Target value AFTER connect (${targetParamName}): ${targetValueAfter.toFixed(4)}`);
+                    } catch (readError) {
+                        console.error(`LFO DEBUG (${instance.id}): Error reading target value AFTER connect:`, readError);
+                    }
+                }, Tone.now() + 0.05); // Check slightly after connection
+                // <<< END ADDED LOG >>>
+            }
+        } else {
+             console.log(`LFO DEBUG (${instance.id}): No valid LFO target determined for destination: ${destination}`); // <<< ADDED LOG
+        }
+
     } catch (error) {
-         console.error(`Error connecting LFO for ${instance.id} to ${destination}:`, error);
+         console.error(`LFO DEBUG (${instance.id}): Error setting up/connecting LFO for ${destination}:`, error); // <<< MODIFIED LOG
     }
 }
-
 
 const handleLfoRateChangeLogic = (instanceId, valueStr, inputElement) => {
     const instance = findInstance(instanceId);
@@ -1827,3 +2139,181 @@ const handleLfoDestinationChangeLogic = (instanceId, destination) => {
     // Reconnect LFO to the new destination
     connectLFO(instance); 
 };
+
+// <<< Functions to manage persistent counters >>>
+function loadPersistentCounters() {
+    persistentTotalTxs = parseInt(localStorage.getItem('persistentTotalTxs') || '0', 10);
+    persistentTotalBlocks = parseInt(localStorage.getItem('persistentTotalBlocks') || '0', 10);
+    updatePersistentCountersDisplay();
+}
+
+function updatePersistentCountersDisplay() {
+    const persistentTxEl = document.getElementById('persistent-tx-count');
+    const persistentBlockEl = document.getElementById('persistent-block-count');
+    if (persistentTxEl) {
+        persistentTxEl.textContent = `Lifetime Txs: ${persistentTotalTxs.toLocaleString()}`;
+    }
+    if (persistentBlockEl) {
+        persistentBlockEl.textContent = `Lifetime Blocks: ${persistentTotalBlocks.toLocaleString()}`;
+    }
+}
+
+// <<< Now loads a named preset from Local Storage directly >>>
+const loadPresetFromLocalStorage = async (presetNameToLoad) => {
+  const presetName = presetNameToLoad;
+  if (!presetName) return;
+
+  let loadedData = null;
+  let isOldFormat = false;
+  
+  const userPresets = JSON.parse(localStorage.getItem('txSynthPresets') || 'null');
+  if (userPresets && userPresets[presetName]) {
+      loadedData = userPresets[presetName];
+      isOldFormat = loadedData.settings && !loadedData.activeSynths;
+  }
+
+  if (!loadedData) {
+    alert(`Preset '${presetName}' not found in Local Storage.`);
+    return;
+  }
+
+  console.log(`Loading preset: ${presetName} (from local storage)`);
+
+  // --- Clear Current State more surgically --- 
+  console.log("Clearing current synths and UI...");
+  const regularSynths = activeSynths.filter(s => s.id !== 'master');
+  regularSynths.forEach(instance => disposeSynth(instance.id));
+  activeSynths = activeSynths.filter(s => s.id === 'master');
+
+  const synthContainer = document.getElementById('synth-container');
+  const regularSynthElements = synthContainer.querySelectorAll('.mini-synth:not(.master-synth)');
+  regularSynthElements.forEach(el => el.remove());
+
+  // --- Process Loaded Data (Migrate if necessary) --- 
+  let targetActiveSynths = [];
+  if (isOldFormat) {
+      console.warn(`Preset '${presetName}' is in old format. Migrating... Granularity will be lost.`);
+      // Attempt migration from old { settings: { pay: {...}, axfer: {...} } } structure
+      if (loadedData.settings && typeof loadedData.settings === 'object') {
+            // Use displayedSynths order if available, otherwise just iterate settings keys
+            const typesToLoad = loadedData.displayedSynths || Object.keys(loadedData.settings);
+            
+            typesToLoad.forEach(type => {
+                if (loadedData.settings[type]) { // Check if settings for this type exist
+                    const oldSettings = loadedData.settings[type];
+                    const uniqueId = `synth-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+                    const newInstance = {
+                        id: uniqueId,
+                        config: { type: type, subtype: null, parameters: {} }, // Basic config
+                        settings: { // Merge old settings into defaults
+                             ...getDefaultInstanceSettings(), // Start with defaults
+                             ...oldSettings // Overwrite with saved values
+                             // Ensure nested objects are handled if necessary (defaults cover it)
+                        },
+                        toneObjects: null
+                    };
+                    targetActiveSynths.push(newInstance);
+      } else {
+                     console.warn(`Type "${type}" listed in old preset but settings missing.`);
+                }
+            });
+      } else {
+          alert(`Failed to migrate old preset format for '${presetName}'. Invalid structure.`);
+          return;
+      }
+  } else if (loadedData.activeSynths && Array.isArray(loadedData.activeSynths)) {
+      // New format: Load directly
+      console.log("Loading preset in new format.");
+      // Deep copy might be safer if objects are complex, but direct assign is ok for now
+      // We need to ensure each loaded instance has default settings applied correctly if partial
+       targetActiveSynths = loadedData.activeSynths.map(loadedInstance => ({ 
+            ...loadedInstance, // Spread loaded data (id, config)
+            settings: { // Ensure settings are complete
+                 ...getDefaultInstanceSettings(), 
+                 ...(loadedInstance.settings || {})
+            },
+            toneObjects: null // Tone objects always start as null when loading
+        }));
+  } else {
+       alert(`Preset '${presetName}' has an unrecognized format.`);
+       return;
+  }
+
+   // --- Update State and Rebuild UI --- 
+  activeSynths.push(...targetActiveSynths);
+  console.log("Applied loaded/migrated settings. Active Synths:", activeSynths);
+
+  console.log("Rebuilding UI...");
+  targetActiveSynths.forEach(instance => {
+      synthContainer.innerHTML += createSynthHTML(instance);
+      // Render parameter area based on loaded config
+      renderParameterArea(instance.id, instance.config.type, instance.config.subtype);
+  });
+
+  // --- Initialize Audio for New Instances --- 
+  console.log("Initializing audio objects for loaded synths...");
+  // Ensure global context is running first
+  if (!synthsInitialized) { await initAudio(); } 
+  // Initialize Tone for each loaded instance
+  for (const instance of targetActiveSynths) {
+      await initializeToneForInstance(instance.id);
+  }
+
+  // --- Update Other UI --- 
+  // initializeEventListeners(); // Delegated listeners are already attached
+  // updateAllValueDisplays(); // TODO: Implement this later
+  // updateAllSequencerDisplays(); // TODO: Implement this later
+  console.log(`Preset "${presetName}" loaded successfully.`);
+  updateStatus(`Preset "${presetName}" loaded`);
+  // Optionally clear status after a delay
+  // setTimeout(() => updateStatus('Streaming...'), 2000); 
+};
+
+// <<< Helper functions for master mute management >>>
+function getAllRegularSynths() {
+    return activeSynths.filter(instance => instance.id !== 'master');
+}
+
+function updateSynthMuteButton(instanceId, isMuted) {
+    const buttonElement = document.querySelector(`.mute-btn[data-instance-id="${instanceId}"]`);
+    if (buttonElement) {
+        buttonElement.innerHTML = isMuted ? svgIconMuted : svgIconUnmuted;
+    }
+}
+
+function muteSynthVolume(instance) {
+    if (!instance.toneObjects?.synth?.volume) return;
+    
+    // Save current volume before muting
+    instance.settings.savedVolume = instance.toneObjects.synth.volume.value;
+    
+    // Disconnect LFO from volume if it's connected
+    if (instance.settings.lfo.destination === 'volume') {
+        try { 
+            instance.toneObjects.lfo.disconnect(instance.toneObjects.synth.volume); 
+        } catch(e) {
+            console.warn(`Could not disconnect LFO from volume for ${instance.id}:`, e.message);
+        }
+    }
+    
+    // Mute the synth
+    instance.toneObjects.synth.volume.rampTo(-Infinity, 0.05);
+    console.log(`Muted synth ${instance.id}, saved volume: ${instance.settings.savedVolume.toFixed(2)} dB`);
+}
+
+function unmuteSynthVolume(instance) {
+    if (!instance.toneObjects?.synth?.volume || instance.settings.savedVolume === null) return;
+    
+    // Restore the saved volume
+    instance.toneObjects.synth.volume.rampTo(instance.settings.savedVolume, 0.05);
+    
+    // Reconnect LFO if it targets volume
+    if (instance.settings.lfo.destination === 'volume') {
+        connectLFO(instance);
+    }
+    
+    console.log(`Unmuted synth ${instance.id}, restored volume: ${instance.settings.savedVolume.toFixed(2)} dB`);
+    
+    // Clear the saved volume
+    instance.settings.savedVolume = null;
+}

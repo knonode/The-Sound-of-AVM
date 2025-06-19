@@ -1,0 +1,308 @@
+{
+    "activeSynths": [
+        {
+            "id": "synth-1749516737477-xl4ai",
+            "config": {
+                "type": "block",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.17,
+                    "decay": 0.2,
+                    "sustain": 0.5,
+                    "release": 0.13
+                },
+                "volume": -16,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.19,
+                    "feedback": 0.18,
+                    "wet": 1
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 0.3
+                },
+                "lfo": {
+                    "rate": 19.3,
+                    "depth": 97,
+                    "waveform": "triangle",
+                    "destination": "delayTime"
+                },
+                "noteDuration": 0.16,
+                "baseNote": "D1",
+                "sequence": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "currentStepIndex": 4
+            }
+        },
+        {
+            "id": "synth-1749516737900-2fl7o",
+            "config": {
+                "type": "pay",
+                "subtype": "amount",
+                "parameters": {
+                    "min": 0.4
+                }
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.07,
+                    "decay": 0.02,
+                    "sustain": 0.04,
+                    "release": 0.6
+                },
+                "volume": -23.5,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.52,
+                    "feedback": 0.37,
+                    "wet": 0.49
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 0.33
+                },
+                "lfo": {
+                    "rate": 16.3,
+                    "depth": 80,
+                    "waveform": "square",
+                    "destination": "pitch"
+                },
+                "noteDuration": 0.15,
+                "baseNote": "C4",
+                "sequence": [
+                    3,
+                    3,
+                    3,
+                    3,
+                    -4,
+                    -4,
+                    -4,
+                    -4
+                ],
+                "currentStepIndex": 6
+            }
+        },
+        {
+            "id": "synth-1749517156440-vb8pf",
+            "config": {
+                "type": "appl",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.02,
+                    "decay": 0.01,
+                    "sustain": 0.02,
+                    "release": 0.04
+                },
+                "volume": -30,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.33,
+                    "feedback": 0.09,
+                    "wet": 0.31
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 0.28
+                },
+                "lfo": {
+                    "rate": 6.3,
+                    "depth": 30,
+                    "waveform": "square",
+                    "destination": "delayTime"
+                },
+                "noteDuration": 0.1,
+                "baseNote": "A6",
+                "sequence": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "currentStepIndex": 4
+            }
+        },
+        {
+            "id": "synth-1749599236981-aw25p",
+            "config": {
+                "type": "block",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.06,
+                    "decay": 0.03,
+                    "sustain": 0.24,
+                    "release": 0.16
+                },
+                "volume": -13,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.14,
+                    "feedback": 0.1,
+                    "wet": 0.21
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 0.3
+                },
+                "lfo": {
+                    "rate": 15,
+                    "depth": 14,
+                    "waveform": "square",
+                    "destination": "pitch"
+                },
+                "noteDuration": 0.37,
+                "baseNote": "A4",
+                "sequence": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "synth-1749599569070-7weht",
+            "config": {
+                "type": "axfer",
+                "subtype": "amount",
+                "parameters": {
+                    "min": 9
+                }
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.12,
+                    "decay": 0.85,
+                    "sustain": 0.7,
+                    "release": 0.72
+                },
+                "volume": -30,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.18,
+                    "feedback": 0.27,
+                    "wet": 0.58
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 0.3
+                },
+                "lfo": {
+                    "rate": 15,
+                    "depth": 33,
+                    "waveform": "triangle",
+                    "destination": "delayTime"
+                },
+                "noteDuration": 0.5,
+                "baseNote": "A3",
+                "sequence": [
+                    0,
+                    2,
+                    2,
+                    2,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "currentStepIndex": 2
+            }
+        },
+        {
+            "id": "synth-1749600344841-ugby3",
+            "config": {
+                "type": "appl",
+                "subtype": null,
+                "parameters": {}
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.01,
+                    "decay": 0.2,
+                    "sustain": 0.3,
+                    "release": 0.2
+                },
+                "volume": -31,
+                "muted": false,
+                "pitch": 0,
+                "delay": {
+                    "time": 0.94,
+                    "feedback": 0.33,
+                    "wet": 1
+                },
+                "reverb": {
+                    "decay": 1.5,
+                    "wet": 1
+                },
+                "lfo": {
+                    "rate": 19.2,
+                    "depth": 96,
+                    "waveform": "triangle",
+                    "destination": "delayTime"
+                },
+                "noteDuration": 0.12,
+                "baseNote": "F3",
+                "sequence": [
+                    0,
+                    1,
+                    1,
+                    3,
+                    5,
+                    7,
+                    13,
+                    17
+                ],
+                "currentStepIndex": 0
+            }
+        }
+    ]
+}
