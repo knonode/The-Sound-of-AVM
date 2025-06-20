@@ -513,44 +513,45 @@ function disposeSynth(instanceId) {
 }
 
 const startTransactionStream = async () => {
+    // Try to initialize audio first (this will work after user clicks)
+    if (!synthsInitialized) {
+        console.log("Audio not initialized, attempting init...");
+        await initAudio();
+        if (!synthsInitialized) {
+            alert('Audio could not be initialized. Please try clicking the button again.');
+            return;
+        }
+    }
+    
+    // Ensure all active synths have Tone objects initialized
+    for (const instance of activeSynths) {
+        if (!instance.toneObjects) {
+            console.log(`Initializing Tone for instance ${instance.id} before starting stream...`);
+            await initializeToneForInstance(instance.id);
+        }
+    }
 
-  if (!synthsInitialized) {
-      console.log("Audio not initialized, attempting init...");
-      await initAudio();
-      if (!synthsInitialized) {
-          alert('Audio could not be initialized.');
-          return;
-      }
-  }
-  // Ensure all active synths have Tone objects initialized
-  for (const instance of activeSynths) {
-      if (!instance.toneObjects) {
-          console.log(`Initializing Tone for instance ${instance.id} before starting stream...`);
-          await initializeToneForInstance(instance.id);
-      }
-  }
+    // Reset counters
+    transactionCount = 0;
+    initializeTypeCounts(); 
+    lastProcessedRound = null; 
+    // Reset sequence indices for all instances
+    activeSynths.forEach(inst => inst.settings.currentStepIndex = 0);
 
-  // Reset counters
-  transactionCount = 0;
-  initializeTypeCounts(); 
-  lastProcessedRound = null; 
-  // Reset sequence indices for all instances
-  activeSynths.forEach(inst => inst.settings.currentStepIndex = 0);
+    isPlaying = true;
+    updateStatus('Connecting to Algorand node...');
 
-  isPlaying = true;
-  updateStatus('Connecting to Algorand node...');
+    const connected = await AlgorandAPI.initAlgodConnection();
+    if (!connected) {
+      console.error("Couldn't connect to Algorand node");
+      updateStatus('Failed to connect to Algorand node');
+      isPlaying = false;
+      alert('Could not connect to the Algorand node.');
+      return;
+    }
 
-  const connected = await AlgorandAPI.initAlgodConnection();
-  if (!connected) {
-    console.error("Couldn't connect to Algorand node");
-    updateStatus('Failed to connect to Algorand node');
-    isPlaying = false;
-    alert('Could not connect to the Algorand node.');
-    return;
-  }
-
-  console.log("Connected to Algorand node - starting transaction polling");
-  updateStatus('Connected - Streaming transactions');
+    console.log("Connected to Algorand node - starting transaction polling");
+    updateStatus('Connected - Streaming transactions');
 
     AlgorandAPI.startPolling((txType, txData, index) => {
       if (!isPlaying) return;
@@ -1097,7 +1098,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
   }
 
-  await initAudio();
+//  await initAudio();
 
   // Start empty, then add Master
   activeSynths = []; 
@@ -2317,3 +2318,8 @@ function unmuteSynthVolume(instance) {
     // Clear the saved volume
     instance.settings.savedVolume = null;
 }
+
+// Make functions available globally for HTML onclick handlers
+window.startTransactionStream = startTransactionStream;
+window.stopTransactionStream = stopTransactionStream;
+// Add other functions that HTML buttons call
