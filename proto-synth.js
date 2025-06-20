@@ -1913,7 +1913,7 @@ function renderParameterArea(instanceId, type, subtype) {
 // Corrected injectSliderStyles function
 const injectSliderStyles = () => {
     // This function is kept for potential future use,
-    // but the main styles for .seq-input are now in proto-synth.html
+    // but the main styles for .seq-input are now in index.html
     // We can leave the CSS string empty or add other non-conflicting styles here.
     const css = `
     /* Base styles for range inputs - These might still be useful here */
