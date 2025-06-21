@@ -1,9 +1,13 @@
 // algorand-direct.js - Direct API calls to Algorand node without SDK
 const ALGOD_SERVER = 'http://localhost';
-const ALGOD_PORT = 8081; // 8080 is the default port for the Algorand API server, you might need to change this
+const ALGOD_PORT = 8081;
 const NODELY_BASE_URL = 'https://mainnet-api.4160.nodely.dev';
-let currentApiMode = 'user_node'; // Track mode in this module
-let ALGOD_TOKEN = null; // Start with no token
+// Update the ALGORANDING_BASE_URL to not need additional endpoints
+const ALGORANDING_BASE_URL = 'https://mempool.algorand.ing/api/mempool';
+
+let currentMempoolMode = 'algoranding'; // For mempool data: 'algoranding' or 'user_node'
+let currentBlockMode = 'nodely'; // For block data: always 'nodely' for now
+let ALGOD_TOKEN = null;
 
 let pollInterval = null;
 let onNewTransactionCallback = null;
@@ -12,30 +16,89 @@ let lastBlockRound = 0;
 
 // Initialize connection to algod
 async function initAlgodConnection() {
-  const { url, headers } = buildApiRequest('/v2/status');
+  // Test both mempool and block connections
+  const mempoolTest = await testMempoolConnection();
+  const blockTest = await testBlockConnection();
+  
+  console.log(`Mempool connection (${currentMempoolMode}): ${mempoolTest ? '✅' : '❌'}`);
+  console.log(`Block connection (${currentBlockMode}): ${blockTest ? '✅' : '❌'}`);
+  
+  return mempoolTest && blockTest;
+}
+
+async function testMempoolConnection() {
+  let url, headers;
+  
+  if (currentMempoolMode === 'algoranding') {
+    const apiRequest = buildMempoolApiRequest('');
+    url = apiRequest.url;
+    headers = apiRequest.headers;
+  } else {
+    const apiRequest = buildMempoolApiRequest('/v2/transactions/pending');
+    url = apiRequest.url;
+    headers = apiRequest.headers;
+  }
   
   try {
-    console.log(`Attempting to connect to ${currentApiMode} at ${url}...`);
-    
+    console.log(`Testing mempool connection to ${currentMempoolMode} at ${url}...`);
     const response = await fetch(url, { headers });
     
     if (response.ok) {
-      const status = await response.json();
-      console.log(`Connected to ${currentApiMode} successfully:`, status);
+      const data = await response.json();
+      console.log(`✅ Mempool connection successful`);
+      
+      // Log different stats based on API
+      if (currentMempoolMode === 'algoranding' && data.stats) {
+        console.log(`Algoranding stats: ${data.stats.totalInPool} total, ${data.stats.shown} shown, ${data.stats.coverage}% coverage`);
+      }
+      
       return true;
     } else {
-      console.error(`Failed to connect to ${currentApiMode} with status ${response.status}: ${response.statusText}`);
+      console.error(`❌ Mempool connection failed: ${response.status} ${response.statusText}`);
       return false;
     }
   } catch (error) {
-    console.error(`Error connecting to ${currentApiMode}:`, error.message);
+    console.error(`❌ Mempool connection error:`, error.message);
     return false;
   }
 }
 
-// Fetch pending transactions directly from the API
+async function testBlockConnection() {
+  const { url, headers } = buildBlockApiRequest('/v2/status');
+  
+  try {
+    console.log(`Testing block connection to ${currentBlockMode} at ${url}...`);
+    const response = await fetch(url, { headers });
+    
+    if (response.ok) {
+      const status = await response.json();
+      console.log(`✅ Block connection successful:`, status);
+      return true;
+    } else {
+      console.error(`❌ Block connection failed: ${response.status} ${response.statusText}`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`❌ Block connection error:`, error.message);
+    return false;
+  }
+}
+
+// Fetch pending transactions from mempool API
 async function getPendingTransactions() {
-  const { url, headers } = buildApiRequest('/v2/transactions/pending');
+  let url, headers;
+  
+  if (currentMempoolMode === 'algoranding') {
+    // Algoranding API - use base URL directly
+    const apiRequest = buildMempoolApiRequest('');
+    url = apiRequest.url;
+    headers = apiRequest.headers;
+  } else {
+    // Standard node API or Nodely - use /v2/transactions/pending endpoint
+    const apiRequest = buildMempoolApiRequest('/v2/transactions/pending');
+    url = apiRequest.url;
+    headers = apiRequest.headers;
+  }
   
   try {
     const response = await fetch(url, { headers });
@@ -44,15 +107,24 @@ async function getPendingTransactions() {
       const data = await response.json();
       console.log("Raw pending transactions response:", data);
       
-      // Determine where the transactions are in the response
+      // Handle different response structures
       let transactions = [];
       
-      if (data && data.top && Array.isArray(data.top)) {
-        transactions = data.top;
-      } else if (data && data['top-transactions'] && Array.isArray(data['top-transactions'])) {
-        transactions = data['top-transactions'];
-      } else if (data && Array.isArray(data)) {
-        transactions = data;
+      if (currentMempoolMode === 'algoranding') {
+        // Algoranding API returns {transactions: [...], stats: {...}}
+        if (data && data.transactions && Array.isArray(data.transactions)) {
+          transactions = data.transactions;
+          console.log(`Algoranding API: ${transactions.length} transactions, stats:`, data.stats);
+        }
+      } else {
+        // Standard node API returns different structures
+        if (data && data.top && Array.isArray(data.top)) {
+          transactions = data.top;
+        } else if (data && data['top-transactions'] && Array.isArray(data['top-transactions'])) {
+          transactions = data['top-transactions'];
+        } else if (data && Array.isArray(data)) {
+          transactions = data;
+        }
       }
       
       return transactions;
@@ -109,7 +181,7 @@ function startPolling(callback, interval = 500) {
         const targetBlock = latestRound;
         console.log(`Attempting to fetch block ${targetBlock}...`);
         
-        const { url: blockUrl, headers: blockHeaders } = buildApiRequest(`/v2/blocks/${targetBlock}`);
+        const { url: blockUrl, headers: blockHeaders } = buildBlockApiRequest(`/v2/blocks/${targetBlock}`);
         const blockResponse = await fetch(blockUrl, { headers: blockHeaders });
         
         console.log(`Block ${targetBlock} response status: ${blockResponse.status}`);
@@ -236,7 +308,7 @@ async function getBlockHeader(round) {
 }
 
 async function getLatestBlockRound() {
-  const { url, headers } = buildApiRequest('/v2/status');
+  const { url, headers } = buildBlockApiRequest('/v2/status');
   
   try {
     const response = await fetch(url, { headers });
@@ -385,13 +457,58 @@ function ensureTokenIsSet() {
   }
 }
 
-function setApiMode(mode) {
-  currentApiMode = mode;
-  console.log(`API mode set to: ${mode}`);
+function setMempoolMode(mode) {
+  if (['algoranding', 'nodely', 'user_node'].includes(mode)) { // Added 'nodely'
+    currentMempoolMode = mode;
+    console.log(`Mempool mode set to: ${mode}`);
+  } else {
+    console.error(`Invalid mempool mode: ${mode}`);
+  }
 }
 
-function buildApiRequest(endpoint) {
-  if (currentApiMode === 'nodely') {
+function setBlockMode(mode) {
+  if (['nodely', 'user_node'].includes(mode)) {
+    currentBlockMode = mode;
+    console.log(`Block mode set to: ${mode}`);
+  } else {
+    console.error(`Invalid block mode: ${mode}`);
+  }
+}
+
+// Build API request for mempool data
+function buildMempoolApiRequest(endpoint) {
+  if (currentMempoolMode === 'algoranding') {
+    // Algoranding API doesn't use standard endpoints - just return the base URL
+    return {
+      url: ALGORANDING_BASE_URL, // No endpoint needed, it's already the mempool
+      headers: {
+        'Accept': 'application/json'
+        // No authentication needed for Algoranding API
+      }
+    };
+  } else if (currentMempoolMode === 'user_node') {
+    ensureTokenIsSet();
+    return {
+      url: `${ALGOD_SERVER}:${ALGOD_PORT}${endpoint}`, // Use the endpoint for standard node API
+      headers: {
+        'X-Algo-API-Token': ALGOD_TOKEN,
+        'Accept': 'application/json'
+      }
+    };
+  } else if (currentMempoolMode === 'nodely') {
+    // Nodely uses standard Algorand API structure
+    return {
+      url: `${NODELY_BASE_URL}${endpoint}`,
+      headers: {
+        'Accept': 'application/json'
+      }
+    };
+  }
+}
+
+// Build API request for block data
+function buildBlockApiRequest(endpoint) {
+  if (currentBlockMode === 'nodely') {
     return {
       url: `${NODELY_BASE_URL}${endpoint}`,
       headers: {
@@ -399,7 +516,7 @@ function buildApiRequest(endpoint) {
         // No authentication needed for Nodely public tier
       }
     };
-  } else {
+  } else if (currentBlockMode === 'user_node') {
     ensureTokenIsSet();
     return {
       url: `${ALGOD_SERVER}:${ALGOD_PORT}${endpoint}`,
@@ -424,5 +541,7 @@ export default {
   extractBlockReward,
   testBlockAPI,
   setApiToken,
-  setApiMode
+  setMempoolMode,
+  setBlockMode,
+  getCurrentModes: () => ({ mempool: currentMempoolMode, block: currentBlockMode })
 };

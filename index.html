@@ -501,8 +501,61 @@
 
         /* <<< NEW: Style for the Master Synth >>> */
         .master-synth {
-            border: 2px solid #00ffcc; /* A bright, distinct border */
+            border: 2px solid #010e0b; /* A bright, distinct border */
             background-color: rgba(0, 50, 50, 0.6);
+        }
+
+        /* Add these styles in the <style> section */
+        .api-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .api-btn {
+            padding: 8px 12px;
+            background-color: #003333;
+            color: #00cccc;
+            border: 1px solid #006666;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .api-btn:hover {
+            background-color: #004444;
+            border-color: #00aaaa;
+        }
+
+        .api-btn.active {
+            background-color: #006666;
+            color: white;
+            border-color: #00cccc;
+        }
+
+        .api-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .countdown-value {
+            display: block;
+            text-align: center;
+            font-size: 16px; /* Bigger than the default 10px */
+            color: #43b38d; /* Light greenish color */
+            font-weight: bold;
+            font-family: 'Courier New', monospace; /* Monospace for better number display */
+            width: 100%; /* Take full width of its container */
+        }
+
+        .current-round-value {
+            display: block;
+            text-align: center;
+            font-size: 16px;
+            color: #43b38d; /* Same light greenish color as countdown */
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            width: 100%;
         }
 
     </style>
@@ -521,7 +574,11 @@
     
     <div class="actions-bar">
         <button id="toggle-aggr-btn" class="toggle-btn">Aggr Txs</button>
-        <button id="toggle-api-btn" class="toggle-btn">Nodely API</button>
+        <div class="api-buttons">
+            <button id="algoranding-btn" class="api-btn active">Algoranding</button>
+            <button id="nodely-btn" class="api-btn">Nodely</button>
+            <button id="user-node-btn" class="api-btn">Your Node</button>
+        </div>
         <button id="add-synth">+ Add Synth</button>
     </div>
         

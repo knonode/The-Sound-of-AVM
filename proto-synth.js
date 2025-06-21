@@ -10,6 +10,10 @@ let persistentTotalBlocks = 0;
 let lastProcessedRound = null; 
 let apiMode = 'nodely'; 
 
+// Replace the old apiMode variable (line 10)
+let currentMempoolMode = 'algoranding'; // Default to algoranding for mempool
+let currentBlockMode = 'nodely'; // Always use nodely for blocks
+
 let masterEQ, masterCompressor, masterLimiter;
 let isMasterMuted = false;
 let masterVolumeBeforeMute = -6.0;
@@ -500,9 +504,13 @@ function disposeSynth(instanceId) {
     }
 
     console.log(`Disposing Tone.js objects for instance ${instanceId}`);
+    
+    // Stop state proof countdown
+    stopStateProofCountdown(instanceId);
+    
     try {
         // Check dispose method exists before calling
-        instance.toneObjects.lfo?.dispose(); // <<< Dispose LFO >>>
+        instance.toneObjects.lfo?.dispose();
         instance.toneObjects.synth?.dispose();
         instance.toneObjects.delay?.dispose();
         instance.toneObjects.reverb?.dispose();
@@ -510,6 +518,98 @@ function disposeSynth(instanceId) {
         console.error(`Error disposing Tone.js objects for ${instanceId}:`, error);
     }
     instance.toneObjects = null; // Clear the reference after disposal
+}
+
+// <<< NEW: State Proof Countdown Variables >>>
+let currentRound = 0;
+const STATE_PROOF_INTERVAL = 256; // State proofs are generated every 256 rounds
+let stateProofCountdownIntervals = {}; // Track interval timers for each stpf instance
+let lastStateProofRound = 0; // Track when we last saw an actual state proof
+
+// <<< NEW: Function to calculate next state proof round >>>
+function calculateNextStateProofRound(currentRound) {
+    if (currentRound === 0) return STATE_PROOF_INTERVAL;
+    
+    // If we've seen a recent state proof, calculate from that
+    if (lastStateProofRound > 0 && (currentRound - lastStateProofRound) < STATE_PROOF_INTERVAL) {
+        // Next state proof should be approximately 256 rounds after the last one
+        return lastStateProofRound + STATE_PROOF_INTERVAL;
+    }
+    
+    // Otherwise, use the theoretical calculation
+    return Math.ceil(currentRound / STATE_PROOF_INTERVAL) * STATE_PROOF_INTERVAL;
+}
+
+// <<< NEW: Function to update state proof countdown displays >>>
+function updateStateProofCountdowns() {
+    if (currentRound === 0) return;
+    
+    const nextStateProofRound = calculateNextStateProofRound(currentRound);
+    const roundsUntilStateProof = nextStateProofRound - currentRound;
+    
+    // Find all stpf synths and update their countdown displays
+    activeSynths.forEach(instance => {
+        if (instance.config.type === 'stpf') {
+            const countdownElement = document.getElementById(`${instance.id}-stpf-countdown`);
+            if (countdownElement) {
+                countdownElement.textContent = `${roundsUntilStateProof}`;
+            }
+        }
+    });
+}
+
+// <<< UPDATED: Function to start countdown timer for an stpf instance >>>
+async function startStateProofCountdown(instanceId) {
+    // Clear existing interval if any
+    if (stateProofCountdownIntervals[instanceId]) {
+        clearInterval(stateProofCountdownIntervals[instanceId]);
+        delete stateProofCountdownIntervals[instanceId];
+    }
+    
+    // Initialize current round if not set
+    if (currentRound === 0) {
+        try {
+            const latestRound = await AlgorandAPI.getLatestBlockRound();
+            if (latestRound) {
+                currentRound = latestRound;
+                console.log(`🔄 Initialized current round to: ${currentRound} for stpf synth ${instanceId}`);
+            }
+        } catch (error) {
+            console.error('Failed to fetch current round for stpf countdown:', error);
+            // Continue with 0 - it will update when stream starts
+        }
+    }
+    
+    // Update countdown immediately
+    updateStateProofCountdowns();
+    
+    // Set up interval to update every 5 seconds
+    stateProofCountdownIntervals[instanceId] = setInterval(() => {
+        updateStateProofCountdowns();
+    }, 5000);
+    
+    console.log(`Started state proof countdown for instance ${instanceId}`);
+}
+
+// <<< NEW: Function to stop countdown timer for an stpf instance >>>
+function stopStateProofCountdown(instanceId) {
+    if (stateProofCountdownIntervals[instanceId]) {
+        clearInterval(stateProofCountdownIntervals[instanceId]);
+        delete stateProofCountdownIntervals[instanceId];
+    }
+}
+
+// Function to update current round displays for block synths
+function updateCurrentRoundDisplays() {
+    // Find all block synths and update their current round displays
+    activeSynths.forEach(instance => {
+        if (instance.config.type === 'block') {
+            const roundElement = document.getElementById(`${instance.id}-current-round`);
+            if (roundElement) {
+                roundElement.textContent = `${currentRound}`;
+            }
+        }
+    });
 }
 
 const startTransactionStream = async () => {
@@ -559,6 +659,27 @@ const startTransactionStream = async () => {
     // --- Core Matching Logic --- 
     const mainType = txType.split('-')[0]; // Get base type (e.g., 'pay', 'axfer')
     
+    // <<< NEW: Track current round from block or transaction data >>>
+    if (mainType === 'block' && txData && (txData.round || txData.txn?.round)) {
+        const newRound = txData.round || txData.txn?.round;
+        if (newRound > currentRound) {
+            currentRound = newRound;
+            console.log(`Updated current round to: ${currentRound}`);
+            updateStateProofCountdowns();
+            updateCurrentRoundDisplays(); // Add this line
+        }
+    }
+    
+    // <<< NEW: Track actual state proof transactions >>>
+    if (mainType === 'stpf') {
+        const txRound = txData.round || txData.txn?.round || currentRound;
+        lastStateProofRound = txRound;
+        console.log(`🔒 State Proof transaction detected at round: ${txRound}`);
+        
+        // Update countdown immediately when we see an actual state proof
+        updateStateProofCountdowns();
+    }
+
     // --- Update All Counters --- 
     
     // 1. Session-based counters
@@ -637,12 +758,18 @@ const startTransactionStream = async () => {
 };
 
 const stopTransactionStream = () => {
-  isPlaying = false;
-  AlgorandAPI.stopPolling();
-  updateStatus('Stream stopped');
-  // Optionally reset LEDs or indicators here
-  document.querySelectorAll('.led.active').forEach(led => led.classList.remove('active'));
-  document.querySelectorAll('.seq-indicator.active').forEach(ind => ind.classList.remove('active'));
+    isPlaying = false;
+    AlgorandAPI.stopPolling();
+    updateStatus('Stream stopped');
+    
+    // Stop all state proof countdowns
+    Object.keys(stateProofCountdownIntervals).forEach(instanceId => {
+        stopStateProofCountdown(instanceId);
+    });
+    
+    // Reset LEDs and indicators
+    document.querySelectorAll('.led.active').forEach(led => led.classList.remove('active'));
+    document.querySelectorAll('.seq-indicator.active').forEach(ind => ind.classList.remove('active'));
 };
 
 // <<< Helper function to check if a transaction matches instance config >>>
@@ -1039,8 +1166,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       'save-preset', 'load-preset', 'save-preset-modal', 'load-preset-modal',
       'modal-preset-buttons', 'save-modal-close', 'load-modal-close',
       'save-new-preset-btn', 'preset-file-input',
-      'toggle-aggr-btn', 'toggle-api-btn', 'api-token-modal', 
-      'token-modal-close', 'api-token-input', 'save-api-token-btn'
+      'toggle-aggr-btn', 'algoranding-btn', 'nodely-btn', 'user-node-btn', 
+      'api-token-modal', 'token-modal-close', 'api-token-input', 'save-api-token-btn'
   ];
   let missingElement = false;
   requiredIds.forEach(id => {
@@ -1066,7 +1193,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saveNewPresetBtn = document.getElementById('save-new-preset-btn');
   const presetFileInput = document.getElementById('preset-file-input');
   const toggleAggrBtn = document.getElementById('toggle-aggr-btn');
-  const toggleApiBtn = document.getElementById('toggle-api-btn');
+  
+  // New API buttons
+  const algorandingBtn = document.getElementById('algoranding-btn');
+  const nodelyBtn = document.getElementById('nodely-btn');
+  const userNodeBtn = document.getElementById('user-node-btn');
+  
   const apiTokenModal = document.getElementById('api-token-modal');
   const tokenModalClose = document.getElementById('token-modal-close');
   const apiTokenInput = document.getElementById('api-token-input');
@@ -1197,68 +1329,72 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Functionality to be added later
   });
 
-  toggleApiBtn.addEventListener('click', () => {
-      if (apiMode === 'nodely') {
-          // Switching TO user node
-          apiMode = 'user_node';
-          toggleApiBtn.textContent = 'Your Node';
-          
-          const storedToken = localStorage.getItem('userAlgodToken');
-          if (storedToken) {
-              console.log("Using stored Algorand API token.");
-              AlgorandAPI.setApiToken(storedToken);  // ✅ This calls the function
-          } else {
-              apiTokenModal.style.display = 'block'; // Show modal to get token
-          }
-      } else {
-          // Switching TO Nodely
-          apiMode = 'nodely';
-          toggleApiBtn.textContent = 'Nodely API';
-          console.log("Switched to Nodely API mode. Stopping stream.");
-          if (isPlaying) {
-            stopTransactionStream();
-          }
-      }
+  // New API button event listeners
+  algorandingBtn.addEventListener('click', () => {
+    setMempoolMode('algoranding');
+  });
+  
+  nodelyBtn.addEventListener('click', () => {
+    setMempoolMode('nodely');
+  });
+  
+  userNodeBtn.addEventListener('click', () => {
+    handleUserNodeSelection();
   });
 
-  // Listeners for the API token modal
+  // Update token modal listeners
   tokenModalClose.addEventListener('click', () => {
       apiTokenModal.style.display = 'none';
-      // If user closes modal without saving, switch state back to Nodely
-      if (apiMode === 'user_node' && !localStorage.getItem('userAlgodToken')) {
-          apiMode = 'nodely';
-          toggleApiBtn.textContent = 'Nodely API';
-      }
   });
   
   saveApiTokenBtn.addEventListener('click', () => {
       const userToken = apiTokenInput.value.trim();
       if (userToken) {
           localStorage.setItem('userAlgodToken', userToken);
-          AlgorandAPI.setApiToken(userToken);  // ✅ This also calls the function
+          
+          // Switch to user node mode for mempool, nodely for blocks
+          currentMempoolMode = 'user_node';
+          currentBlockMode = 'nodely'; // Changed from 'user_node' to 'nodely'
+          AlgorandAPI.setMempoolMode('user_node');
+          AlgorandAPI.setBlockMode('nodely');
+          AlgorandAPI.setApiToken(userToken);
+          
           apiTokenModal.style.display = 'none';
-          console.log("User API token saved and applied.");
+          updateApiButtonStates();
+          console.log("User API token saved and applied. Using Your Node for mempool, Nodely for blocks.");
+          
+          // Restart stream if currently playing
+          if (isPlaying) {
+            stopTransactionStream();
+            setTimeout(() => startTransactionStream(), 1000);
+          }
       } else {
           alert("Please enter a valid API token.");
       }
   });
 
-  // <<< Set default API mode based on stored token >>>
-  const storedToken = localStorage.getItem('userAlgodToken');
-  if (storedToken) {
-    // User has a token, default to user node
-    apiMode = 'user_node';
-    toggleApiBtn.textContent = 'Your Node';
-    AlgorandAPI.setApiMode('user_node');
-    AlgorandAPI.setApiToken(storedToken);
-  } else {
-    // No token, default to Nodely
-    apiMode = 'nodely';
-    toggleApiBtn.textContent = 'Nodely API';
-    AlgorandAPI.setApiMode('nodely');
-  }
+  // Initialize API modes and button states
+  initializeApiModes();
+  updateApiButtonStates();
+
+  // Initialize state proof countdown
+  await initializeStateProofCountdown();
 
 });
+
+async function initializeStateProofCountdown() {
+  try {
+    // Use existing API to get real current round
+    const latestRound = await AlgorandAPI.getLatestBlockRound();
+    if (latestRound) {
+      currentRound = latestRound; // UPDATE THE EXISTING VARIABLE!
+      console.log(`🔄 Initialized current round to: ${currentRound}`);
+      updateStateProofCountdowns();
+    }
+  } catch (error) {
+    console.error('Failed to initialize state proof countdown:', error);
+  }
+}
 
 // <<< initializeEventListeners Uses Event Delegation >>>
 const initializeEventListeners = () => {
@@ -1509,7 +1645,11 @@ const handleCloseLogic = (instanceId, synthElement) => {
     const index = activeSynths.findIndex(s => s.id === instanceId);
     if (index > -1) {
         console.log(`Removing synth instance ${instanceId}`);
-        disposeSynth(instanceId); // <<< Call disposeSynth for the instance
+        
+        // Stop state proof countdown if it exists
+        stopStateProofCountdown(instanceId);
+        
+        disposeSynth(instanceId);
         activeSynths.splice(index, 1); 
         synthElement.remove(); 
         console.log("Active synths after close:", activeSynths);
@@ -1530,6 +1670,11 @@ const handleTypeChangeLogic = (instanceId, selectedType, selectElement) => {
     instance.config.subtype = null; // Reset subtype
     instance.config.parameters = {}; // Reset parameters
 
+    // CRITICAL FIX: Special case for stpf - auto-set subtype
+    if (selectedType === 'stpf') {
+        instance.config.subtype = 'stpf';
+    }
+
     // Update CSS class on the synth element 
     if (synthElement) {
         if (oldType) {
@@ -1541,7 +1686,7 @@ const handleTypeChangeLogic = (instanceId, selectedType, selectElement) => {
     }
 
     updateSubtypeDropdown(instanceId, selectedType); 
-    renderParameterArea(instanceId, selectedType, null); 
+    renderParameterArea(instanceId, selectedType, instance.config.subtype); // Pass correct subtype
 };
 
 const handleSubtypeChangeLogic = (instanceId, selectedSubtype, selectElement) => {
@@ -1835,11 +1980,35 @@ function renderParameterArea(instanceId, type, subtype) {
 
     let paramHTML = ''; // Start with empty HTML
  
+    // <<< FIXED: Special handling for stpf type >>>
+    if (type === 'stpf') {
+        // CRITICAL FIX: Set the subtype so transaction matching works
+        instance.config.subtype = 'stpf';
+        
+        const nextStateProofRound = calculateNextStateProofRound(currentRound);
+        const roundsUntilStateProof = Math.max(0, nextStateProofRound - currentRound);
+        
+        paramHTML += `<span id="${instanceId}-stpf-countdown" class="countdown-value">${roundsUntilStateProof}</span>`;
+        
+        paramArea.innerHTML = paramHTML;
+        
+        // Start the countdown timer for this instance
+        startStateProofCountdown(instanceId);
+        return;
+    }
+    // Special handling for block type - show current round
+    if (type === 'block') {
+        paramHTML += `<span id="${instanceId}-current-round" class="current-round-value">${currentRound}</span>`;
+        paramArea.innerHTML = paramHTML;
+        return;
+    }
+
     if (!type || !subtype) {
         // If no type/subtype, just show the label input
         paramArea.innerHTML = paramHTML; // Set the HTML containing only the label
         return;
     }
+    
     const rule = granularityRules[type]?.find(r => r.subtype === subtype);
 
     if (!rule) { // Rule not found for subtype
@@ -2323,3 +2492,102 @@ function unmuteSynthVolume(instance) {
 window.startTransactionStream = startTransactionStream;
 window.stopTransactionStream = stopTransactionStream;
 // Add other functions that HTML buttons call
+
+// Add these new functions
+function initializeApiModes() {
+  const storedToken = localStorage.getItem('userAlgodToken');
+  
+  if (storedToken) {
+    // User has a token, default to user node for mempool, nodely for blocks
+    currentMempoolMode = 'user_node';
+    currentBlockMode = 'nodely';
+    AlgorandAPI.setMempoolMode('user_node');
+    AlgorandAPI.setBlockMode('nodely');
+    AlgorandAPI.setApiToken(storedToken); // ← ADD THIS LINE!
+    console.log("Using stored token for Your Node mempool mode, Nodely for blocks");
+  } else {
+    // No token, default to Algoranding
+    currentMempoolMode = 'algoranding';
+    currentBlockMode = 'nodely';
+    AlgorandAPI.setMempoolMode('algoranding');
+    AlgorandAPI.setBlockMode('nodely');
+    console.log("Using Algoranding for mempool, Nodely for blocks");
+  }
+}
+
+function setMempoolMode(mode) {
+  if (mode === 'algoranding') {
+    currentMempoolMode = 'algoranding';
+    currentBlockMode = 'nodely'; // Always use nodely for blocks
+    AlgorandAPI.setMempoolMode('algoranding');
+    AlgorandAPI.setBlockMode('nodely');
+    console.log("Using Algoranding for mempool, Nodely for blocks");
+  } else if (mode === 'nodely') {
+    currentMempoolMode = 'nodely';
+    currentBlockMode = 'nodely';
+    AlgorandAPI.setMempoolMode('nodely');
+    AlgorandAPI.setBlockMode('nodely');
+    console.log("Using Nodely for both mempool and blocks");
+  }
+  
+  updateApiButtonStates();
+  
+  // Restart stream if currently playing
+  if (isPlaying) {
+    stopTransactionStream();
+    setTimeout(() => startTransactionStream(), 1000);
+  }
+}
+
+function handleUserNodeSelection() {
+  const storedToken = localStorage.getItem('userAlgodToken');
+  
+  if (storedToken) {
+    // User has a token, switch to user node for mempool, but keep nodely for blocks
+    currentMempoolMode = 'user_node';
+    currentBlockMode = 'nodely'; // Changed from 'user_node' to 'nodely'
+    AlgorandAPI.setMempoolMode('user_node');
+    AlgorandAPI.setBlockMode('nodely');
+    AlgorandAPI.setApiToken(storedToken); // ← ADD THIS LINE!
+    console.log("Using Your Node for mempool, Nodely for blocks");
+    updateApiButtonStates();
+    
+    // Restart stream if currently playing
+    if (isPlaying) {
+      stopTransactionStream();
+      setTimeout(() => startTransactionStream(), 1000);
+    }
+  } else {
+    // Show modal to get token
+    const apiTokenModal = document.getElementById('api-token-modal');
+    apiTokenModal.style.display = 'block';
+    console.log("Showing token modal");
+  }
+}
+
+function updateApiButtonStates() {
+  const algorandingBtn = document.getElementById('algoranding-btn');
+  const nodelyBtn = document.getElementById('nodely-btn');
+  const userNodeBtn = document.getElementById('user-node-btn');
+  
+  if (!algorandingBtn || !nodelyBtn || !userNodeBtn) {
+    console.error("API buttons not found in DOM");
+    return;
+  }
+  
+  // Remove active class from all buttons
+  [algorandingBtn, nodelyBtn, userNodeBtn].forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  // Add active class to current mode
+  if (currentMempoolMode === 'algoranding') {
+    algorandingBtn.classList.add('active');
+  } else if (currentMempoolMode === 'nodely') {
+    nodelyBtn.classList.add('active');
+  } else if (currentMempoolMode === 'user_node') {
+    userNodeBtn.classList.add('active');
+  }
+  
+  console.log(`Updated button states: mempool=${currentMempoolMode}, block=${currentBlockMode}`);
+}
