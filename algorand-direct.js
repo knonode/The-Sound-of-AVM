@@ -105,7 +105,7 @@ async function getPendingTransactions() {
     
     if (response.ok) {
       const data = await response.json();
-      console.log("Raw pending transactions response:", data);
+      // console.log("Raw pending transactions response:", data);
       
       // Handle different response structures
       let transactions = [];
@@ -148,75 +148,105 @@ function startPolling(callback, interval = 500) {
   lastTxCount = 0;
   lastBlockRound = 0;
   
-  pollInterval = setInterval(async () => {
-    try {
-      // Existing pending transactions logic
-      const transactions = await getPendingTransactions();
-      
-      if (!Array.isArray(transactions)) {
-        console.warn("Expected an array of transactions but got:", transactions);
-        return;
+  const bootstrapAndStart = async () => {
+    // Bootstrap: get current round once at startup
+    if (lastBlockRound === 0) {
+      try {
+        const { url, headers } = buildBlockApiRequest('/v2/status');
+        const response = await fetch(url, { headers });
+        if (response.ok) {
+          const status = await response.json();
+          lastBlockRound = status['last-round'];
+          console.log(`🚀 Starting from current round: ${lastBlockRound}`);
+        } else {
+          throw new Error(`Status call failed: ${response.status}`);
+        }
+      } catch (error) {
+        console.warn('Could not get starting round, using fallback:', error.message);
+        lastBlockRound = 51125000; // Reasonable fallback
       }
-      
-      const txCount = transactions.length;
-      console.log(`Pending transactions: ${txCount}, previous: ${lastTxCount}`);
-      
-      if (txCount > lastTxCount) {
-        const newTxCount = txCount - lastTxCount;
-        console.log(`Found ${newTxCount} new transactions`);
-        const newTxs = transactions.slice(0, newTxCount);
-        processTransactions(newTxs);
-      } else if (txCount < lastTxCount) {
-        console.log(`${lastTxCount - txCount} transactions were processed into a block`);
-      }
-      
-      lastTxCount = txCount;
-      
-      // UPDATED: Block polling logic with better error handling
-      const latestRound = await getLatestBlockRound();
-      if (latestRound && latestRound > lastBlockRound) {
-        console.log(`New blocks detected: ${lastBlockRound + 1} to ${latestRound}`);
+    }
+    
+    // Now start the actual polling interval
+    pollInterval = setInterval(async () => {
+      try {
+        // Existing pending transactions logic
+        const transactions = await getPendingTransactions();
         
-        // Try to fetch the most recent completed block
-        const targetBlock = latestRound;
-        console.log(`Attempting to fetch block ${targetBlock}...`);
+        if (!Array.isArray(transactions)) {
+          console.warn("Expected an array of transactions but got:", transactions);
+          return;
+        }
         
-        const { url: blockUrl, headers: blockHeaders } = buildBlockApiRequest(`/v2/blocks/${targetBlock}`);
+        const txCount = transactions.length;
+        // console.log(`Pending transactions: ${txCount}, previous: ${lastTxCount}`);
+        
+        if (txCount > lastTxCount) {
+          const newTxCount = txCount - lastTxCount;
+          // console.log(`Found ${newTxCount} new transactions`);
+          const newTxs = transactions.slice(0, newTxCount);
+          processTransactions(newTxs);
+        } else if (txCount < lastTxCount) {
+          console.log(`${lastTxCount - txCount} transactions were processed into a block`);
+        }
+        
+        lastTxCount = txCount;
+        
+        // UPDATED: Block polling logic - try to fetch next block directly
+        const nextBlockRound = lastBlockRound + 1;
+        const { url: blockUrl, headers: blockHeaders } = buildBlockApiRequest(`/v2/blocks/${nextBlockRound}`);
         const blockResponse = await fetch(blockUrl, { headers: blockHeaders });
-        
-        console.log(`Block ${targetBlock} response status: ${blockResponse.status}`);
         
         if (blockResponse.ok) {
           const blockData = await blockResponse.json();
-          console.log(`✅ Successfully fetched block ${targetBlock}`);
+          const actualRound = blockData.block.rnd;
           
-          // Simple: just signal a new block was produced
+          console.log(`✅ New block ${actualRound} fetched successfully`);
+          
+          // Extract the authoritative next state proof round from the block data.
+          const nextStateProofRound = blockData?.block?.spt?.[0]?.n;
+          
+          // Signal that a new block was produced, now including the schedule data.
           const newBlockSignal = {
             txn: {
               type: 'block',
-              round: targetBlock,
+              round: actualRound,
               snd: 'ALGORAND-PROTOCOL',
               rcv: null
             },
-            round: targetBlock
+            round: actualRound,
+            nextStateProofRound: nextStateProofRound || null // Pass it along.
           };
           
-          console.log(`🔥 New block ${targetBlock} - triggering sound`);
           onNewTransactionCallback('block', newBlockSignal);
+          lastBlockRound = actualRound;
+          
+          // Check if there are more blocks (rapid block production)
+          // Try to fetch one more block to see if we're behind
+          const nextNextBlockRound = actualRound + 1;
+          const { url: nextBlockUrl, headers: nextBlockHeaders } = buildBlockApiRequest(`/v2/blocks/${nextNextBlockRound}`);
+          const nextBlockResponse = await fetch(nextBlockUrl, { headers: nextBlockHeaders });
+          
+          if (nextBlockResponse.ok) {
+            console.log(`⚡ Multiple new blocks detected, will catch up next iteration`);
+          }
+        } else if (blockResponse.status === 404) {
+          // No new block yet, this is normal
+          // console.log(`No new block at round ${nextBlockRound} yet`);
         } else {
-          const errorText = await blockResponse.text();
-          console.log(`❌ Block ${targetBlock} failed:`, errorText);
+          console.error(`Failed to fetch block ${nextBlockRound}: ${blockResponse.status} ${blockResponse.statusText}`);
         }
         
-        lastBlockRound = latestRound;
+      } catch (error) {
+        console.error("Error during polling:", error);
       }
-      
-    } catch (error) {
-      console.error("Error during polling:", error);
-    }
-  }, interval);
+    }, interval);
+    
+    console.log(`Started polling for transactions and blocks every ${interval}ms`);
+  };
   
-  console.log(`Started polling for transactions and blocks every ${interval}ms`);
+  // Start the bootstrap process
+  bootstrapAndStart();
   return true;
 }
 
@@ -235,12 +265,12 @@ function processTransactions(transactions) {
     return;
   }
   
-  console.log(`Processing ${transactions.length} new transactions`);
+  // console.log(`Processing ${transactions.length} new transactions`);
   
   transactions.forEach(tx => {
     try {
       // Log the raw transaction for debugging
-      console.log("Raw transaction:", tx);
+      // console.log("Raw transaction:", tx);
       
       // Try to determine transaction type
       let txType = 'pay'; // Default to payment
@@ -254,7 +284,7 @@ function processTransactions(transactions) {
         txType = tx.type;
       }
       
-      console.log(`Detected transaction type: ${txType}`);
+      // console.log(`Detected transaction type: ${txType}`);
       
       // Call the callback
       onNewTransactionCallback(txType, tx);
@@ -308,22 +338,8 @@ async function getBlockHeader(round) {
 }
 
 async function getLatestBlockRound() {
-  const { url, headers } = buildBlockApiRequest('/v2/status');
-  
-  try {
-    const response = await fetch(url, { headers });
-    
-    if (response.ok) {
-      const status = await response.json();
-      return status['last-round'];
-    } else {
-      console.error(`Failed to get status: ${response.status} ${response.statusText}`);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error getting latest block round:', error);
-    return null;
-  }
+  // Simple: return the last known round from polling, or null if not started
+  return lastBlockRound > 0 ? lastBlockRound : null;
 }
 
 // The block reward extraction function, not yet used in sound synthesis:
@@ -528,6 +544,27 @@ function buildBlockApiRequest(endpoint) {
   }
 }
 
+async function getBlock(round) {
+  const { url, headers } = buildBlockApiRequest(`/v2/blocks/${round}`);
+  
+  try {
+    const response = await fetch(url, { headers });
+    
+    if (response.ok) {
+      const blockData = await response.json();
+      return blockData;
+    } else {
+      // Don't log 404s as errors - blocks might not be available yet
+      if (response.status !== 404) {
+        console.error(`Failed to fetch block ${round}: ${response.status} ${response.statusText}`);
+      }
+      return null;
+    }
+  } catch (error) {
+    console.error(`Error fetching block ${round}:`, error);
+    return null;
+  }
+}
 
 // Export the API
 export default {
@@ -537,6 +574,7 @@ export default {
   stopPolling,
   testConnection,
   getBlockHeader,
+  getBlock,
   getLatestBlockRound,
   extractBlockReward,
   testBlockAPI,

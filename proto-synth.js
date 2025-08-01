@@ -520,93 +520,98 @@ function disposeSynth(instanceId) {
     instance.toneObjects = null; // Clear the reference after disposal
 }
 
-// <<< NEW: State Proof Countdown Variables >>>
+// <<< UPDATED: State Proof Countdown Variables >>>
 let currentRound = 0;
 const STATE_PROOF_INTERVAL = 256; // State proofs are generated every 256 rounds
-let stateProofCountdownIntervals = {}; // Track interval timers for each stpf instance
-let lastStateProofRound = 0; // Track when we last saw an actual state proof
+let stateProofCountdownIntervals = {}; // Track interval timers for each stpf instance (keeping for compatibility)
+let stateProofCountdowns = {}; // Store individual countdown values for each stpf instance
 
-// <<< NEW: Function to calculate next state proof round >>>
-function calculateNextStateProofRound(currentRound) {
-    if (currentRound === 0) return STATE_PROOF_INTERVAL;
-    
-    // If we've seen a recent state proof, calculate from that
-    if (lastStateProofRound > 0 && (currentRound - lastStateProofRound) < STATE_PROOF_INTERVAL) {
-        // Next state proof should be approximately 256 rounds after the last one
-        return lastStateProofRound + STATE_PROOF_INTERVAL;
+// <<< SIMPLIFIED: Function to get state proof countdown >>>
+async function getStateProofCountdown(instanceId) {
+    try {
+        // If we don't have a current round yet, use fallback
+        if (currentRound === 0) {
+            console.log(`State proof countdown for ${instanceId}: using fallback (no current round yet)`);
+            return 256;
+        }
+
+        // Get the current block data (we know this round exists)
+        const blockData = await AlgorandAPI.getBlock(currentRound);
+        if (!blockData) {
+            console.warn(`Could not get block data for round ${currentRound}, using fallback`);
+            return 256;
+        }
+
+        // Extract state proof tracking data
+        const spt = blockData.block?.spt;
+        if (spt && spt[0] && typeof spt[0].n === 'number') {
+            const nextStateProofRound = spt[0].n;
+            const countdown = Math.max(0, nextStateProofRound - currentRound);
+            console.log(`✅ State proof countdown for ${instanceId}: ${countdown} rounds (next: ${nextStateProofRound}, current: ${currentRound})`);
+            return countdown;
+        } else {
+            console.log(`No state proof data in block ${currentRound}, using fallback`);
+            return 256;
+        }
+    } catch (error) {
+        console.error('Error getting state proof countdown:', error);
+        return 256;
     }
-    
-    // Otherwise, use the theoretical calculation
-    return Math.ceil(currentRound / STATE_PROOF_INTERVAL) * STATE_PROOF_INTERVAL;
 }
 
-// <<< NEW: Function to update state proof countdown displays >>>
-function updateStateProofCountdowns() {
-    if (currentRound === 0) return;
-    
-    const nextStateProofRound = calculateNextStateProofRound(currentRound);
-    const roundsUntilStateProof = nextStateProofRound - currentRound;
-    
-    // Find all stpf synths and update their countdown displays
-    activeSynths.forEach(instance => {
-        if (instance.config.type === 'stpf') {
-            const countdownElement = document.getElementById(`${instance.id}-stpf-countdown`);
-            if (countdownElement) {
-                countdownElement.textContent = `${roundsUntilStateProof}`;
-            }
+// <<< NEW: Function to initialize state proof countdown for an instance >>>
+async function initializeStateProofCountdown(instanceId) {
+    const countdown = await getStateProofCountdown(instanceId);
+    stateProofCountdowns[instanceId] = countdown;
+    updateStateProofDisplay(instanceId);
+    return countdown;
+}
+
+// <<< NEW: Function to update individual state proof display >>>
+function updateStateProofDisplay(instanceId) {
+    const countdownElement = document.getElementById(`${instanceId}-stpf-countdown`);
+    if (countdownElement && stateProofCountdowns[instanceId] !== undefined) {
+        countdownElement.textContent = `${stateProofCountdowns[instanceId]}`;
+    }
+}
+
+// <<< NEW: Function to decrement state proof countdowns >>>
+function decrementStateProofCountdowns() {
+    Object.keys(stateProofCountdowns).forEach(instanceId => {
+        if (stateProofCountdowns[instanceId] > 0) {
+            stateProofCountdowns[instanceId]--;
+            updateStateProofDisplay(instanceId);
         }
     });
 }
 
-// <<< UPDATED: Function to start countdown timer for an stpf instance >>>
-async function startStateProofCountdown(instanceId) {
-    // Clear existing interval if any
-    if (stateProofCountdownIntervals[instanceId]) {
-        clearInterval(stateProofCountdownIntervals[instanceId]);
-        delete stateProofCountdownIntervals[instanceId];
-    }
-    
-    // Initialize current round if not set
-    if (currentRound === 0) {
-        try {
-            const latestRound = await AlgorandAPI.getLatestBlockRound();
-            if (latestRound) {
-                currentRound = latestRound;
-                console.log(`🔄 Initialized current round to: ${currentRound} for stpf synth ${instanceId}`);
-            }
-        } catch (error) {
-            console.error('Failed to fetch current round for stpf countdown:', error);
-            // Continue with 0 - it will update when stream starts
-        }
-    }
-    
-    // Update countdown immediately
-    updateStateProofCountdowns();
-    
-    // Set up interval to update every 5 seconds
-    stateProofCountdownIntervals[instanceId] = setInterval(() => {
-        updateStateProofCountdowns();
-    }, 5000);
-    
-    console.log(`Started state proof countdown for instance ${instanceId}`);
+// <<< NEW: Function to reset state proof countdowns when stpf tx detected >>>
+function resetStateProofCountdowns() {
+    Object.keys(stateProofCountdowns).forEach(instanceId => {
+        stateProofCountdowns[instanceId] = 256;
+        updateStateProofDisplay(instanceId);
+        console.log(`🔄 Reset state proof countdown for ${instanceId} to 256`);
+    });
 }
 
-// <<< NEW: Function to stop countdown timer for an stpf instance >>>
+// <<< UPDATED: Function to stop countdown timer for an stpf instance >>>
 function stopStateProofCountdown(instanceId) {
     if (stateProofCountdownIntervals[instanceId]) {
         clearInterval(stateProofCountdownIntervals[instanceId]);
         delete stateProofCountdownIntervals[instanceId];
     }
+    // Clean up the countdown value
+    delete stateProofCountdowns[instanceId];
 }
 
 // Function to update current round displays for block synths
 function updateCurrentRoundDisplays() {
-    // Find all block synths and update their current round displays
     activeSynths.forEach(instance => {
         if (instance.config.type === 'block') {
             const roundElement = document.getElementById(`${instance.id}-current-round`);
             if (roundElement) {
-                roundElement.textContent = `${currentRound}`;
+                const displayRound = currentRound > 0 ? currentRound : 'N/A';
+                roundElement.textContent = `${displayRound}`;
             }
         }
     });
@@ -638,6 +643,13 @@ const startTransactionStream = async () => {
     // Reset sequence indices for all instances
     activeSynths.forEach(inst => inst.settings.currentStepIndex = 0);
 
+    // <<< NEW: Initialize state proof countdowns for all stpf synths at play start >>>
+    const stpfSynths = activeSynths.filter(instance => instance.config.type === 'stpf');
+    for (const instance of stpfSynths) {
+        await initializeStateProofCountdown(instance.id);
+        console.log(`Initialized state proof countdown for ${instance.id}`);
+    }
+
     isPlaying = true;
     updateStatus('Connecting to Algorand node...');
 
@@ -659,26 +671,28 @@ const startTransactionStream = async () => {
     // --- Core Matching Logic --- 
     const mainType = txType.split('-')[0]; // Get base type (e.g., 'pay', 'axfer')
     
-    // <<< NEW: Track current round from block or transaction data >>>
-    if (mainType === 'block' && txData && (txData.round || txData.txn?.round)) {
-        const newRound = txData.round || txData.txn?.round;
-        if (newRound > currentRound) {
-            currentRound = newRound;
-            console.log(`Updated current round to: ${currentRound}`);
-            updateStateProofCountdowns();
-            updateCurrentRoundDisplays(); // Add this line
-        }
+    // --- Update current round ---
+    if (currentRound === 0) {
+        currentRound = txData.round - 1;
     }
-    
-    // <<< NEW: Track actual state proof transactions >>>
-    if (mainType === 'stpf') {
-        const txRound = txData.round || txData.txn?.round || currentRound;
-        lastStateProofRound = txRound;
-        console.log(`🔒 State Proof transaction detected at round: ${txRound}`);
-        
-        // Update countdown immediately when we see an actual state proof
-        updateStateProofCountdowns();
+    // Always update the current round for subsequent blocks
+    if (txData.round > currentRound) {
+        currentRound = txData.round;
     }
+
+    // <<< NEW: Simple countdown logic >>>
+    if (txType === 'block') {
+        // Decrement all state proof countdowns on each block
+        decrementStateProofCountdowns();
+    }
+
+    // <<< NEW: Reset countdown when stpf transaction detected >>>
+    if (txType === 'stpf') {
+        resetStateProofCountdowns();
+    }
+
+    // Always refresh displays with the latest data.
+    updateCurrentRoundDisplays();
 
     // --- Update All Counters --- 
     
@@ -1382,20 +1396,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 });
 
-async function initializeStateProofCountdown() {
-  try {
-    // Use existing API to get real current round
-    const latestRound = await AlgorandAPI.getLatestBlockRound();
-    if (latestRound) {
-      currentRound = latestRound; // UPDATE THE EXISTING VARIABLE!
-      console.log(`🔄 Initialized current round to: ${currentRound}`);
-      updateStateProofCountdowns();
-    }
-  } catch (error) {
-    console.error('Failed to initialize state proof countdown:', error);
-  }
-}
-
 // <<< initializeEventListeners Uses Event Delegation >>>
 const initializeEventListeners = () => {
     const synthContainer = document.getElementById('synth-container');
@@ -1980,22 +1980,21 @@ function renderParameterArea(instanceId, type, subtype) {
 
     let paramHTML = ''; // Start with empty HTML
  
-    // <<< FIXED: Special handling for stpf type >>>
+    // <<< UPDATED: Special handling for stpf type >>>
     if (type === 'stpf') {
         // CRITICAL FIX: Set the subtype so transaction matching works
         instance.config.subtype = 'stpf';
         
-        const nextStateProofRound = calculateNextStateProofRound(currentRound);
-        const roundsUntilStateProof = Math.max(0, nextStateProofRound - currentRound);
-        
-        paramHTML += `<span id="${instanceId}-stpf-countdown" class="countdown-value">${roundsUntilStateProof}</span>`;
+        // Initialize countdown display (will be populated when synth is created)
+        paramHTML += `<span id="${instanceId}-stpf-countdown" class="countdown-value">...</span>`;
         
         paramArea.innerHTML = paramHTML;
         
-        // Start the countdown timer for this instance
-        startStateProofCountdown(instanceId);
+        // Initialize the countdown asynchronously
+        initializeStateProofCountdown(instanceId);
         return;
     }
+    
     // Special handling for block type - show current round
     if (type === 'block') {
         paramHTML += `<span id="${instanceId}-current-round" class="current-round-value">${currentRound}</span>`;
@@ -2160,7 +2159,7 @@ function scaleLfoDepth(destination, depthPercent, baseValue) {
 // Helper function to connect/disconnect LFO based on settings
 function connectLFO(instance) {
     if (!instance?.toneObjects?.lfo || !instance.toneObjects.synth || !instance.toneObjects.delay) {
-        console.warn(`LFO DEBUG (${instance.id}): Cannot connect LFO, Tone objects not ready.`);
+        // console.warn(`LFO DEBUG (${instance.id}): Cannot connect LFO, Tone objects not ready.`);
         return;
     }
 
@@ -2170,16 +2169,16 @@ function connectLFO(instance) {
     const { volume: baseVolume } = instance.settings; // Needed for volume base level
     const { time: baseDelayTime } = instance.settings.delay; // Needed for delay base time
 
-    console.log(`LFO DEBUG (${instance.id}): connectLFO called. Dest: ${destination}, Depth: ${depth}, BaseVol: ${baseVolume}`); // <<< ADDED LOG
+    // console.log(`LFO DEBUG (${instance.id}): connectLFO called. Dest: ${destination}, Depth: ${depth}, BaseVol: ${baseVolume}`); // <<< ADDED LOG
 
     // --- Disconnect from all potential targets first ---
-    console.log(`LFO DEBUG (${instance.id}): Attempting to disconnect LFO from previous targets...`); // <<< ADDED LOG
+    // console.log(`LFO DEBUG (${instance.id}): Attempting to disconnect LFO from previous targets...`); // <<< ADDED LOG
     try {
          // Simply call disconnect - it's safe if not connected
          lfo.disconnect(synth.oscillator.frequency);
          lfo.disconnect(synth.volume);
          lfo.disconnect(delay.delayTime);
-         console.log(`LFO DEBUG (${instance.id}): Disconnect successful (or was not connected).`); // <<< MODIFIED LOG
+         //console.log(`LFO DEBUG (${instance.id}): Disconnect successful (or was not connected).`); // <<< MODIFIED LOG
     } catch (e) {
         // Log error IF disconnect itself fails for some reason
         console.error(`LFO DEBUG (${instance.id}): Error during LFO disconnect call:`, e); // <<< MODIFIED LOG
@@ -2191,18 +2190,18 @@ function connectLFO(instance) {
     // The LFO's amplitude controls the *amount* of modulation.
     // The LFO's min/max determine the *range* it oscillates over relative to the target's base value.
     const targetAmplitude = depth > 0 ? 1 : 0; // <<< RENAMED for clarity
-    console.log(`LFO DEBUG (${instance.id}): Setting LFO amplitude to: ${targetAmplitude}`); // <<< ADDED LOG
+    // console.log(`LFO DEBUG (${instance.id}): Setting LFO amplitude to: ${targetAmplitude}`); // <<< ADDED LOG
     lfo.amplitude.value = targetAmplitude;
 
     if (depth === 0 || destination === 'none') {
-        console.log(`LFO DEBUG (${instance.id}): LFO inactive (Depth 0 or Dest None). Resetting min/max.`);
+        // console.log(`LFO DEBUG (${instance.id}): LFO inactive (Depth 0 or Dest None). Resetting min/max.`);
         lfo.min = 0; // Reset min/max when inactive
         lfo.max = 0;
         return; // Exit if no destination or zero depth
     }
 
     // --- Connect to the new target and set min/max based on scaled depth ---
-    console.log(`LFO DEBUG (${instance.id}): Preparing LFO for ${destination}. ScaledMod: ${scaledModulationAmount.toFixed(2)}`); // <<< MODIFIED LOG
+    // console.log(`LFO DEBUG (${instance.id}): Preparing LFO for ${destination}. ScaledMod: ${scaledModulationAmount.toFixed(2)}`); // <<< MODIFIED LOG
 
     let targetParam = null;
     let targetParamName = '';
@@ -2232,14 +2231,14 @@ function connectLFO(instance) {
                 const safeMaxDelay = Math.min(1.0, baseDelayTime * 3);     // Never above 1s, and not above 3x base
                 lfo.min = Math.max(safeMinDelay, baseDelayTime - (scaledModulationAmount * 0.5)); // Reduce modulation amount
                 lfo.max = Math.min(safeMaxDelay, baseDelayTime + (scaledModulationAmount * 0.5)); // Reduce modulation amount
-                console.log(`LFO DEBUG (${instance.id}): DelayTime bounds - Min: ${lfo.min.toFixed(3)}s, Max: ${lfo.max.toFixed(3)}s, Base: ${baseDelayTime.toFixed(3)}s`);
+                // console.log(`LFO DEBUG (${instance.id}): DelayTime bounds - Min: ${lfo.min.toFixed(3)}s, Max: ${lfo.max.toFixed(3)}s, Base: ${baseDelayTime.toFixed(3)}s`);
                 break;
         }
 
         if (targetParam) {
             try {
                 targetValueBefore = targetParam.value;
-                console.log(`LFO DEBUG (${instance.id}): Connecting LFO. Target: ${targetParamName}, Min: ${lfo.min.toFixed(4)}, Max: ${lfo.max.toFixed(4)}, Target value BEFORE connect: ${targetValueBefore.toFixed(4)}`); // <<< ADDED LOG
+                //console.log(`LFO DEBUG (${instance.id}): Connecting LFO. Target: ${targetParamName}, Min: ${lfo.min.toFixed(4)}, Max: ${lfo.max.toFixed(4)}, Target value BEFORE connect: ${targetValueBefore.toFixed(4)}`); // <<< ADDED LOG
             } catch (readError) {
                  console.error(`LFO DEBUG (${instance.id}): Error reading target value BEFORE connect:`, readError);
                  targetValueBefore = 'Error reading value';
@@ -2247,10 +2246,10 @@ function connectLFO(instance) {
 
             // Connect only if valid target and not muted (for volume)
             if (destination === 'volume' && instance.settings.muted) {
-                console.log(`LFO DEBUG (${instance.id}): Synth muted, skipping LFO connect to volume.`); // <<< ADDED LOG
+                // console.log(`LFO DEBUG (${instance.id}): Synth muted, skipping LFO connect to volume.`); // <<< ADDED LOG
             } else {
                 lfo.connect(targetParam);
-                console.log(`LFO DEBUG (${instance.id}): LFO connected to ${targetParamName}.`); // <<< ADDED LOG
+                // console.log(`LFO DEBUG (${instance.id}): LFO connected to ${targetParamName}.`); // <<< ADDED LOG
 
                 // <<< ADDED LOG: Schedule check of value AFTER connect >>>
                 Tone.Draw.schedule(() => {
@@ -2264,7 +2263,7 @@ function connectLFO(instance) {
                 // <<< END ADDED LOG >>>
             }
         } else {
-             console.log(`LFO DEBUG (${instance.id}): No valid LFO target determined for destination: ${destination}`); // <<< ADDED LOG
+             // console.log(`LFO DEBUG (${instance.id}): No valid LFO target determined for destination: ${destination}`); // <<< ADDED LOG
         }
 
     } catch (error) {
