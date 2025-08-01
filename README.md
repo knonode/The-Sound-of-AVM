@@ -2,9 +2,9 @@
 
 ## Algorand Transaction Sonifier
 
-In this prototype stage, use Nodely API or connect to your node through a port with an `algod` token that can be found in your node directory. The token is stored in local browser storage.
+In this prototype stage, use Algoranding API or connect to your node through a port with an `algod` token that can be found in your node directory. The token is stored in local browser storage. Before using your local node from the deployed app, you must enable CORS headers. Add this to your Algorand node config.json: `"EnablePrivateNetworkAccessHeader": true`. Then restart your Algorand node.
 
-Start a local server, for example:
+Alternatively, fork the repo and start a local server, for example:
 
 ```bash
 npx http-server .
@@ -16,7 +16,7 @@ The script polls the pending transactions every 50ms and lets `Tone.js` schedule
 
 **How to Play**
 
-Start with a defualt preset from the Load Preset menu and play around with the settings. Less is more. Add synths and set the sources as your favorite accounts, ASAs and applications. Create more exciting soundscape by assigning more than one synth to one source but with different sounds. Less is more. Let the `block` synth be the rythm and create a theme, like arbitrage, ora mining, stable coins, memecoins. Save your preset layout, download the json, share with friends.
+Start with a default preset from the Load Preset menu and play around with the settings. Less is more. Add synths and set the sources as your favorite accounts, ASAs and applications. Create more exciting soundscape by assigning more than one synth to one source but with different sounds. Less is more. Let the `block` synth be the rythm and create a theme, like arbitrage, ora mining, stable coins, memecoins. Save your preset layout, download the json, share with friends.
 
 **UI Elements:**
 

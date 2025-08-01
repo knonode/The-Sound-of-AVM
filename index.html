@@ -19,24 +19,37 @@
         .top-bar {
             display: flex;
             justify-content: space-between;
-            padding: 5px 10px;
+            align-items: center; /* Center align items vertically */
+            padding: 3px 8px; /* Reduced from 5px 10px */
             background-color: rgba(0, 0, 0, 0.3);
             border-radius: 5px;
-            margin-bottom: 10px;
+            margin-bottom: 8px; /* Reduced from 10px */
+            flex-wrap: wrap; /* Allow wrapping on very small screens */
+            gap: 5px; /* Add gap for wrapped elements */
+        }
+        
+        .top-bar h1 {
+            margin: 0; /* Remove default margin */
+            font-size: 16px; /* Smaller title */
+            white-space: nowrap; /* Prevent text wrapping */
+            flex-shrink: 0; /* Prevent title from shrinking */
         }
         
         .controls {
             display: flex;
-            gap: 5px;
+            gap: 3px; /* Reduced from 5px */
+            flex-wrap: wrap; /* Allow buttons to wrap if needed */
         }
         
         button {
             background-color: #006666;
             color: white;
             border: none;
-            padding: 5px 10px;
+            padding: 3px 6px; /* Reduced from 5px 10px */
             border-radius: 3px;
             cursor: pointer;
+            font-size: 11px; /* Smaller font */
+            white-space: nowrap; /* Prevent text wrapping */
         }
         
         button:hover {
@@ -161,14 +174,19 @@
         }
         
         .actions-bar {
-            margin: 10px 0;
+            margin: 6px 0; /* Reduced from 10px 0 */
             display: flex;
             justify-content: flex-end;
-            gap: 10px; /* Add gap between buttons */
+            align-items: center; /* Center align items vertically */
+            gap: 5px; /* Reduced from 10px */
+            flex-wrap: wrap; /* Allow wrapping on small screens */
         }
 
         .toggle-btn {
-            background-color: #004d4d; /* A different color */
+            background-color: #004d4d;
+            padding: 3px 6px; /* Reduced padding to match other buttons */
+            font-size: 11px; /* Smaller font */
+            white-space: nowrap;
         }
 
         /* Specific styling for base note controls row */
@@ -248,10 +266,6 @@
              height: 1em;
         }
 
-        /* Adjust spacing for specific items in the header */
-        .synth-header .led {
-             /* Default spacing might be fine */
-        }
         .synth-header .type-select {
              flex-grow: 0; 
              flex-shrink: 1; /* Allow shrinking */
@@ -357,6 +371,7 @@
             box-sizing: border-box;
             font-size: 10px; /* Match other inputs */
             -moz-appearance: textfield; /* Firefox */
+            appearance: textfield; /* Standard property */
         }
         /* Hide number input spinners */
         .seq-input::-webkit-outer-spin-button,
@@ -509,18 +524,20 @@
         /* Add these styles in the <style> section */
         .api-buttons {
             display: flex;
-            gap: 5px;
+            gap: 3px; /* Reduced from 5px */
+            flex-wrap: wrap; /* Allow API buttons to wrap */
         }
 
         .api-btn {
-            padding: 8px 12px;
+            padding: 4px 8px; /* Reduced from 8px 12px */
             background-color: #003333;
             color: #00cccc;
             border: 1px solid #006666;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 10px; /* Reduced from 12px */
             transition: all 0.2s ease;
+            white-space: nowrap;
         }
 
         .api-btn:hover {
@@ -635,11 +652,26 @@
     <div id="api-token-modal" class="modal">
         <div class="modal-content">
             <span class="modal-close" id="token-modal-close">&times;</span>
-            <h2>Enter Algorand Node API Token</h2>
-            <p>Please provide the API token for your local Algorand node. This will be saved in your browser's local storage.</p>
+            <h2>Connect to Your Algorand Node</h2>
+            
+            <div class="instructions">
+                <h3>⚙️ Required Node Configuration</h3>
+                <p>Before using your local node, you must enable CORS headers. Add this to your Algorand node config.json:</p>
+                <code>"EnablePrivateNetworkAccessHeader": true</code>
+                <p><strong>Then restart your Algorand node.</strong></p>
+                
+                <h3>🔑 API Token</h3>
+                <p>Enter your node's API token below. This will be saved in your browser's local storage.</p>
+            </div>
+            
             <input type="text" id="api-token-input" placeholder="Your API token...">
+            
             <div class="modal-buttons">
                 <button id="save-api-token-btn">Save and Use Token</button>
+            </div>
+            
+            <div class="help-text">
+                <small>💡 <strong>Why this is needed:</strong> Modern browsers block websites from accessing localhost for security. The configuration above tells your node to allow this connection.</small>
             </div>
         </div>
     </div>
