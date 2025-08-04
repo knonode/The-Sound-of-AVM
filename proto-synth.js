@@ -28,7 +28,7 @@ function getDefaultInstanceSettings() {
     return {
         oscillator: { type: 'sine' },
         envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.2 },
-        volume: -30,
+        volume: -12,
         muted: false,
         savedVolume: null, 
         mutedByMaster: false, 
@@ -359,8 +359,8 @@ const createMasterSynthHTML = () => {
         <!-- Limiter Section -->
         <div class="limiter-section">
             <span class="control-label">Limiter</span>
-            <div class="control-row"><span class="control-label">Threshold: <span id="${uniqueId}-limit-thresh-val">-0.1 dB</span></span></div>
-            <div class="control-row"><input type="range" id="${uniqueId}-limit-thresh" min="-24" max="0" step="0.1" value="-0.1" data-instance-id="${uniqueId}"></div>
+            <div class="control-row"><span class="control-label">Threshold: <span id="${uniqueId}-limit-thresh-val">-2.0 dB</span></span></div>
+            <div class="control-row"><input type="range" id="${uniqueId}-limit-thresh" min="-6" max="-2" step="0.1" value="-2" data-instance-id="${uniqueId}"></div>
         </div>
     `;
 
@@ -386,7 +386,7 @@ const initAudio = async () => {
       // <<< NEW: Initialize Master FX Chain >>>
       masterEQ = new Tone.EQ3({ low: 0, mid: 0, high: 0 });
       masterCompressor = new Tone.Compressor({ threshold: -24, ratio: 4 });
-      masterLimiter = new Tone.Limiter(-0.1);
+      masterLimiter = new Tone.Limiter(-2);
       
       // Connect the master chain: EQ -> Compressor -> Limiter -> Final Output
       masterEQ.connect(masterCompressor);
@@ -658,13 +658,21 @@ const startTransactionStream = async () => {
       console.error("Couldn't connect to Algorand node");
       updateStatus('Failed to connect to Algorand node');
       isPlaying = false;
-      alert('Could not connect to the Algorand node.');
+      
+      // Check if we're in user_node mode for better error message
+      const currentModes = AlgorandAPI.getCurrentModes();
+      if (currentModes.mempool === 'user_node' || currentModes.block === 'user_node') {
+        alert('Could not connect to your local node. Remember: Your node connection only works on the same device/network. Try "Algoranding" or "Nodely" for remote access.');
+      } else {
+        alert('Could not connect to the Algorand node.');
+      }
       return;
     }
 
     console.log("Connected to Algorand node - starting transaction polling");
     updateStatus('Connected - Streaming transactions');
 
+    // Let AlgorandAPI select the proper cadence for the chosen provider
     AlgorandAPI.startPolling((txType, txData, index) => {
       if (!isPlaying) return;
 
@@ -672,27 +680,21 @@ const startTransactionStream = async () => {
     const mainType = txType.split('-')[0]; // Get base type (e.g., 'pay', 'axfer')
     
     // --- Update current round ---
-    if (currentRound === 0) {
-        currentRound = txData.round - 1;
-    }
-    // Always update the current round for subsequent blocks
-    if (txData.round > currentRound) {
-        currentRound = txData.round;
-    }
-
-    // <<< NEW: Simple countdown logic >>>
-    if (txType === 'block') {
-        // Decrement all state proof countdowns on each block
-        decrementStateProofCountdowns();
-    }
-
-    // <<< NEW: Reset countdown when stpf transaction detected >>>
-    if (txType === 'stpf') {
-        resetStateProofCountdowns();
+    if (txType === 'block' && txData.round) {
+        if (currentRound === 0) {
+            currentRound = txData.round;
+            console.log(`🔥 Initial currentRound set to: ${currentRound}`);
+        }
+        // Always update the current round for subsequent blocks
+        if (txData.round > currentRound) {
+            console.log(`🔥 Updating currentRound from ${currentRound} to ${txData.round}`);
+            currentRound = txData.round;
+        }
     }
 
     // Always refresh displays with the latest data.
-    updateCurrentRoundDisplays();
+    // Delay round display update to ensure DOM is ready
+    setTimeout(updateCurrentRoundDisplays, 10);
 
     // --- Update All Counters --- 
     
@@ -751,7 +753,6 @@ const startTransactionStream = async () => {
     } else if (generalMatches.length > 0) {
         // If no specific match, but general matches exist, play the general ones
         instancesToPlay = generalMatches;
-         console.log(`TX ${txType} matched ${generalMatches.length} GENERAL instances (no specific matches).`);
     } else {
         // No matches found for this type (specific check failed for all relevant subtypes)
         // console.log(`TX ${txType} - No specific or general matches found.`);
@@ -768,7 +769,7 @@ const startTransactionStream = async () => {
         });
     }
 
-   }, 50); // Polling interval
+   });    // Polling interval is chosen automatically
 };
 
 const stopTransactionStream = () => {
@@ -1259,7 +1260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   activeSynths.push({
       id: 'master',
       config: {},
-      settings: {},
+      settings: getDefaultInstanceSettings(), // Give master proper settings
       toneObjects: null // Master FX chain will be handled separately
   });
   
@@ -1997,7 +1998,7 @@ function renderParameterArea(instanceId, type, subtype) {
     
     // Special handling for block type - show current round
     if (type === 'block') {
-        paramHTML += `<span id="${instanceId}-current-round" class="current-round-value">${currentRound}</span>`;
+        paramHTML += `<span id="${instanceId}-current-round" class="current-round-value">${currentRound > 0 ? currentRound : 'N/A'}</span>`;
         paramArea.innerHTML = paramHTML;
         return;
     }
@@ -2497,15 +2498,15 @@ function initializeApiModes() {
   const storedToken = localStorage.getItem('userAlgodToken');
   
   if (storedToken) {
-    // User has a token, default to user node for mempool, nodely for blocks
+    // User has a token, use user node for both mempool and blocks
     currentMempoolMode = 'user_node';
-    currentBlockMode = 'nodely';
+    currentBlockMode = 'user_node';
     AlgorandAPI.setMempoolMode('user_node');
-    AlgorandAPI.setBlockMode('nodely');
-    AlgorandAPI.setApiToken(storedToken); // ← ADD THIS LINE!
-    console.log("Using stored token for Your Node mempool mode, Nodely for blocks");
+    AlgorandAPI.setBlockMode('user_node');
+    AlgorandAPI.setApiToken(storedToken);
+    console.log("Using stored token for Your Node (mempool and blocks)");
   } else {
-    // No token, default to Algoranding
+    // No token, use algoranding for mempool, nodely for blocks
     currentMempoolMode = 'algoranding';
     currentBlockMode = 'nodely';
     AlgorandAPI.setMempoolMode('algoranding');
@@ -2517,16 +2518,14 @@ function initializeApiModes() {
 function setMempoolMode(mode) {
   if (mode === 'algoranding') {
     currentMempoolMode = 'algoranding';
-    currentBlockMode = 'nodely'; // Always use nodely for blocks
+    currentBlockMode = 'nodely';
     AlgorandAPI.setMempoolMode('algoranding');
     AlgorandAPI.setBlockMode('nodely');
     console.log("Using Algoranding for mempool, Nodely for blocks");
   } else if (mode === 'nodely') {
-    currentMempoolMode = 'nodely';
-    currentBlockMode = 'nodely';
-    AlgorandAPI.setMempoolMode('nodely');
-    AlgorandAPI.setBlockMode('nodely');
-    console.log("Using Nodely for both mempool and blocks");
+    // Nodely is disabled - this shouldn't be called
+    console.warn("Nodely mode is disabled");
+    return;
   }
   
   updateApiButtonStates();
@@ -2542,25 +2541,20 @@ function handleUserNodeSelection() {
   const storedToken = localStorage.getItem('userAlgodToken');
   
   if (storedToken) {
-    // User has a token, switch to user node for mempool, but keep nodely for blocks
+    // User has a token, switch to user node for mempool, but keep algoranding for blocks
     currentMempoolMode = 'user_node';
-    currentBlockMode = 'nodely'; // Changed from 'user_node' to 'nodely'
+    currentBlockMode = 'user_node'; // Use user_node for blocks too when token available
     AlgorandAPI.setMempoolMode('user_node');
-    AlgorandAPI.setBlockMode('nodely');
-    AlgorandAPI.setApiToken(storedToken); // ← ADD THIS LINE!
-    console.log("Using Your Node for mempool, Nodely for blocks");
+    AlgorandAPI.setBlockMode('user_node');
+    AlgorandAPI.setApiToken(storedToken);
     updateApiButtonStates();
-    
-    // Restart stream if currently playing
-    if (isPlaying) {
-      stopTransactionStream();
-      setTimeout(() => startTransactionStream(), 1000);
-    }
+    console.log("Using Your Node for mempool and blocks");
   } else {
-    // Show modal to get token
+    // No token, show the modal
     const apiTokenModal = document.getElementById('api-token-modal');
-    apiTokenModal.style.display = 'block';
-    console.log("Showing token modal");
+    if (apiTokenModal) {
+      apiTokenModal.style.display = 'block';
+    }
   }
 }
 

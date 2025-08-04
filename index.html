@@ -40,7 +40,7 @@
             gap: 3px; /* Reduced from 5px */
             flex-wrap: wrap; /* Allow buttons to wrap if needed */
         }
-        
+
         button {
             background-color: #006666;
             color: white;
@@ -50,8 +50,17 @@
             cursor: pointer;
             font-size: 11px; /* Smaller font */
             white-space: nowrap; /* Prevent text wrapping */
+            transition: background-color 0.2s;
         }
-        
+        button:disabled,
+        .disabled,
+        [aria-disabled="true"] {
+            background-color: #444 !important;
+            color: #bbb !important;
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
         button:hover {
             background-color: #009999;
         }
@@ -187,6 +196,11 @@
             padding: 3px 6px; /* Reduced padding to match other buttons */
             font-size: 11px; /* Smaller font */
             white-space: nowrap;
+        }
+
+        .toggle-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         /* Specific styling for base note controls row */
@@ -584,17 +598,17 @@
         <div class="controls">
             <button id="start-btn">Start</button>
             <button id="stop-btn">Stop</button>
-            <button id="record-btn">Record</button>
+            <button id="record-btn" disabled>Record</button>
             <button id="save-preset">Save Preset</button>
             <button id="load-preset">Load Preset</button>
         </div>
     </div>
     
     <div class="actions-bar">
-        <button id="toggle-aggr-btn" class="toggle-btn">Aggr Txs</button>
+        <button id="toggle-aggr-btn" class="toggle-btn" disabled>Aggr Txs</button>
         <div class="api-buttons">
             <button id="algoranding-btn" class="api-btn active">Algoranding</button>
-            <button id="nodely-btn" class="api-btn">Nodely</button>
+            <button id="nodely-btn" class="api-btn" disabled>Nodely</button>
             <button id="user-node-btn" class="api-btn">Your Node</button>
         </div>
         <button id="add-synth">+ Add Synth</button>
@@ -655,6 +669,9 @@
             <h2>Connect to Your Algorand Node</h2>
             
             <div class="instructions">
+                <h3>⚠️ Important: Same Machine Only</h3>
+                <p><strong>Your node connection only works on the same device/network as your Algorand node.</strong> If you're on a different device, use "Algoranding" or "Nodely" instead.</p>
+                
                 <h3>⚙️ Required Node Configuration</h3>
                 <p>Before using your local node, you must enable CORS headers. Add this to your Algorand node config.json:</p>
                 <code>"EnablePrivateNetworkAccessHeader": true</code>
@@ -678,5 +695,9 @@
 
     <script type="module" src="algorand-direct.js"></script>
     <script type="module" src="proto-synth.js?t=1234567890"></script>
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+      </script>
+      <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

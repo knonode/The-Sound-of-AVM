@@ -41,6 +41,7 @@ async function testMempoolConnection() {
   
   try {
     console.log(`Testing mempool connection to ${currentMempoolMode} at ${url}...`);
+    console.log('Headers being sent:', headers); // Add this line
     const response = await fetch(url, { headers });
     
     if (response.ok) {
@@ -54,7 +55,9 @@ async function testMempoolConnection() {
       
       return true;
     } else {
+      const responseText = await response.text();
       console.error(`❌ Mempool connection failed: ${response.status} ${response.statusText}`);
+      console.error('Response body:', responseText);
       return false;
     }
   } catch (error) {
@@ -64,22 +67,29 @@ async function testMempoolConnection() {
 }
 
 async function testBlockConnection() {
-  const { url, headers } = buildBlockApiRequest('/v2/status');
+  console.log(`Testing block connection to ${currentBlockMode}...`);
+  
+  const blockRequest = buildBlockApiRequest('/v2/status');
+  if (!blockRequest) {
+    console.error('❌ Block connection failed: No valid block API configuration');
+    return false;
+  }
+  
+  const { url, headers } = blockRequest;
+  console.log(`Block connection headers:`, headers);
   
   try {
-    console.log(`Testing block connection to ${currentBlockMode} at ${url}...`);
     const response = await fetch(url, { headers });
-    
     if (response.ok) {
-      const status = await response.json();
-      console.log(`✅ Block connection successful:`, status);
+      const data = await response.json();
+      console.log(`✅ Block connection successful:`, data);
       return true;
     } else {
       console.error(`❌ Block connection failed: ${response.status} ${response.statusText}`);
       return false;
     }
   } catch (error) {
-    console.error(`❌ Block connection error:`, error.message);
+    console.error('❌ Block connection error:', error);
     return false;
   }
 }
@@ -139,7 +149,25 @@ async function getPendingTransactions() {
 }
 
 // Start polling for new transactions
-function startPolling(callback, interval = 500) {
+// The UI now omits the interval argument; we derive one from the active mode:
+//   • user_node   →  50 ms  (≈20 req/s - local)
+//   • nodely      → 500 ms  (≈2 req/s)
+//   • algoranding → 500 ms  (≈2 req/s)
+function startPolling(callback, interval) {
+  // Choose an interval only when the caller didn’t specify one
+  if (interval === undefined || interval === null) {
+    if (currentMempoolMode === 'user_node' && currentBlockMode === 'user_node') {
+      // Both mempool and blocks from local node - can handle 50ms
+      interval = 50;
+    } else {
+      // Any remote API (algoranding/nodely) - use 500ms to be respectful
+      interval = 500;
+    }
+    console.log(`Auto-selected interval: ${interval}ms for mempool:${currentMempoolMode}, blocks:${currentBlockMode}`);
+  } else {
+    console.log(`Using explicit interval: ${interval}ms`);
+  }
+
   if (pollInterval) {
     stopPolling();
   }
@@ -192,9 +220,15 @@ function startPolling(callback, interval = 500) {
         
         lastTxCount = txCount;
         
-        // UPDATED: Block polling logic - try to fetch next block directly
+        // UPDATED: Block polling logic - check if we can fetch blocks first
         const nextBlockRound = lastBlockRound + 1;
-        const { url: blockUrl, headers: blockHeaders } = buildBlockApiRequest(`/v2/blocks/${nextBlockRound}`);
+        const blockRequest = buildBlockApiRequest(`/v2/blocks/${nextBlockRound}`);
+        if (!blockRequest) {
+          // No valid block API, skip block polling
+          return;
+        }
+        
+        const { url: blockUrl, headers: blockHeaders } = blockRequest;
         const blockResponse = await fetch(blockUrl, { headers: blockHeaders });
         
         if (blockResponse.ok) {
@@ -221,15 +255,6 @@ function startPolling(callback, interval = 500) {
           onNewTransactionCallback('block', newBlockSignal);
           lastBlockRound = actualRound;
           
-          // Check if there are more blocks (rapid block production)
-          // Try to fetch one more block to see if we're behind
-          const nextNextBlockRound = actualRound + 1;
-          const { url: nextBlockUrl, headers: nextBlockHeaders } = buildBlockApiRequest(`/v2/blocks/${nextNextBlockRound}`);
-          const nextBlockResponse = await fetch(nextBlockUrl, { headers: nextBlockHeaders });
-          
-          if (nextBlockResponse.ok) {
-            console.log(`⚡ Multiple new blocks detected, will catch up next iteration`);
-          }
         } else if (blockResponse.status === 404) {
           // No new block yet, this is normal
           // console.log(`No new block at round ${nextBlockRound} yet`);
@@ -264,9 +289,7 @@ function processTransactions(transactions) {
   if (!onNewTransactionCallback || !Array.isArray(transactions) || transactions.length === 0) {
     return;
   }
-  
-  // console.log(`Processing ${transactions.length} new transactions`);
-  
+    
   transactions.forEach(tx => {
     try {
       // Log the raw transaction for debugging
@@ -474,7 +497,7 @@ function ensureTokenIsSet() {
 }
 
 function setMempoolMode(mode) {
-  if (['algoranding', 'nodely', 'user_node'].includes(mode)) { // Added 'nodely'
+  if (['algoranding', 'nodely', 'user_node'].includes(mode)) {
     currentMempoolMode = mode;
     console.log(`Mempool mode set to: ${mode}`);
   } else {
@@ -483,7 +506,7 @@ function setMempoolMode(mode) {
 }
 
 function setBlockMode(mode) {
-  if (['nodely', 'user_node'].includes(mode)) {
+  if (['user_node', 'algoranding', 'nodely'].includes(mode)) {
     currentBlockMode = mode;
     console.log(`Block mode set to: ${mode}`);
   } else {
@@ -494,12 +517,12 @@ function setBlockMode(mode) {
 // Build API request for mempool data
 function buildMempoolApiRequest(endpoint) {
   if (currentMempoolMode === 'algoranding') {
-    // Algoranding API doesn't use standard endpoints - just return the base URL
     return {
-      url: ALGORANDING_BASE_URL, // No endpoint needed, it's already the mempool
+      url: ALGORANDING_BASE_URL,
       headers: {
-        'Accept': 'application/json'
-        // No authentication needed for Algoranding API
+        'Accept': 'application/json',
+        'Origin': window.location.origin,
+        'Referer': window.location.href
       }
     };
   } else if (currentMempoolMode === 'user_node') {
@@ -522,17 +545,9 @@ function buildMempoolApiRequest(endpoint) {
   }
 }
 
-// Build API request for block data
+// Replace the buildBlockApiRequest function (around line 540)
 function buildBlockApiRequest(endpoint) {
-  if (currentBlockMode === 'nodely') {
-    return {
-      url: `${NODELY_BASE_URL}${endpoint}`,
-      headers: {
-        'Accept': 'application/json'
-        // No authentication needed for Nodely public tier
-      }
-    };
-  } else if (currentBlockMode === 'user_node') {
+  if (currentBlockMode === 'user_node') {
     ensureTokenIsSet();
     return {
       url: `${ALGOD_SERVER}:${ALGOD_PORT}${endpoint}`,
@@ -541,7 +556,31 @@ function buildBlockApiRequest(endpoint) {
         'Accept': 'application/json'
       }
     };
+  } else if (currentBlockMode === 'nodely') {
+    // Nodely provides block data
+    return {
+      url: `${NODELY_BASE_URL}${endpoint}`,
+      headers: {
+        'Accept': 'application/json'
+      }
+    };
+  } else if (currentBlockMode === 'algoranding') {
+    // Algoranding doesn't provide block endpoints, fall back to user_node if token available
+    if (ALGOD_TOKEN) {
+      ensureTokenIsSet();
+      return {
+        url: `${ALGOD_SERVER}:${ALGOD_PORT}${endpoint}`,
+        headers: {
+          'X-Algo-API-Token': ALGOD_TOKEN,
+          'Accept': 'application/json'
+        }
+      };
+    } else {
+      console.error('Algoranding mode requires user node token for block data');
+      return null;
+    }
   }
+  return null; // Default fallback
 }
 
 async function getBlock(round) {
