@@ -49,9 +49,9 @@
     "tslib": "^2.6.2"
   },
   "scripts": {
-    "generate:app-clients": "npx algokit project link --all || echo 'Skipping algokit linking (not available in build environment)'",
+    "generate:app-clients": "echo 'Skipping algokit linking (contract client is stub)'",
     "dev": "npm run generate:app-clients && npm run build:algorand-lib && vite",
-    "build": "npm run generate:app-clients && npm run build:algorand-lib && tsc && vite build",
+    "build": "npm run build:algorand-lib && tsc && vite build",
     "build:algorand-lib": "node scripts/build-algorand-lib.js",
     "test": "jest --coverage --passWithNoTests",
     "playwright:test": "playwright test",

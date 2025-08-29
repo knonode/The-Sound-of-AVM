@@ -304,6 +304,9 @@ function processTransactions(transactions: Transaction[]): void {
     return;
   }
 
+  // Store callback locally to satisfy TypeScript's null analysis within closures
+  const callback = onNewTransactionCallback;
+
   transactions.forEach(tx => {
     try {
       // Log the raw transaction for debugging
@@ -324,11 +327,11 @@ function processTransactions(transactions: Transaction[]): void {
       // console.log(`Detected transaction type: ${txType}`);
 
       // Call the callback
-      onNewTransactionCallback(txType, tx);
+      callback(txType, tx);
     } catch (error) {
       console.error("Error processing transaction:", error);
       // Still try to play a sound
-      onNewTransactionCallback('pay', tx);
+      callback('pay', tx);
     }
   });
 }
