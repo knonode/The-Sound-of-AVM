@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.vscode/**'
+      - '.idea/**'
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  SOA-contracts-validate:
+    name: Run SOA-contracts release
+    secrets: inherit
+    uses: ./.github/workflows/SOA-contracts-ci.yaml
+
+  SOA-contracts-release:
+    name: Run SOA-contracts release
+    secrets: inherit
+    uses: ./.github/workflows/SOA-contracts-cd.yaml
+    needs: SOA-contracts-validate
+
+  SOA-frontend-validate:
+    name: Run SOA-frontend release
+    secrets: inherit
+    uses: ./.github/workflows/SOA-frontend-ci.yaml
+
+  SOA-frontend-release:
+    name: Run SOA-frontend release
+    secrets: inherit
+    uses: ./.github/workflows/SOA-frontend-cd.yaml
+    needs: SOA-frontend-validate

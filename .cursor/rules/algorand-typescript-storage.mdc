@@ -1,0 +1,71 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Algorand TypeScript storage usage
+
+- Do:
+   - Use GlobalState for application-wide storage
+      - Declare with GlobalState function and explicit type annotations
+      - Use property names as keys or specify custom keys
+   - Use LocalState for account-specific storage
+      - Require opt-in for accounts that need local storage
+      - Use explicit type annotations
+   - Use BoxStorage for dynamic storage needs
+      - Use Box for single values
+      - Use BoxMap for grouped values with common key prefix
+      - Use BoxRef for binary data and large arrays
+   - Use Scratch storage for temporary group transaction data
+      - Reserve scratch slots explicitly using contract decorator
+      - Use appropriate load methods (loadUint64, loadBytes)
+   
+- Don't:
+   - Don't forget to declare storage requirements
+      - Always specify state totals in contract decorator
+      - Always declare box storage requirements
+   - Don't use dynamic keys without explicit state reservation
+   - Don't exceed storage limits
+      - Stay within box size limits (currently 4096 bytes)
+      - Consider minimum balance requirements
+   - Don't access scratch slots without reserving them first
+
+- Local storage example
+```
+import {
+  Contract,
+  LocalState,
+  abimethod,
+  uint64,
+  Uint64,
+  Txn,
+  Global,
+  assert
+} from "@algorandfoundation/algorand-typescript";
+
+export class UserPointsContract extends Contract {
+  // Define local state for user points
+  userPoints = LocalState<uint64>();
+
+  @abimethod({ allowActions: ["OptIn"] })
+  optIn() {
+    // Initialize user points to 0 on opt-in
+    this.userPoints(Txn.sender).value = Uint64(0);
+  }
+
+  addPoints(points: uint64) {
+    // Ensure account is opted in
+    assert(Txn.sender.isOptedIn(Global.currentApplicationId));
+
+    // Get current points and add new points
+    const currentPoints = this.userPoints(Txn.sender).value;
+    this.userPoints(Txn.sender).value = currentPoints + points;
+  }
+
+  getPoints(): uint64 {
+    assert(Txn.sender.isOptedIn(Global.currentApplicationId));
+    return this.userPoints(Txn.sender).value;
+  }
+}
+```
+

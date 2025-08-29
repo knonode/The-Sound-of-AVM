@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Algorand Transaction Flow</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+    <style>
+        body {
+            background-color: #1e1e1e;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #ddd;
+            margin-bottom: 30px;
+        }
+        #chart {
+            width: 100%;
+            max-width: 1000px;
+            height: 700px;
+            margin: 0 auto;
+        }
+        .node rect {
+            fill-opacity: 0.9;
+        }
+        .node text {
+            font-size: 14px;
+            fill: #fff;
+            font-weight: bold;
+        }
+        .link {
+            fill: none;
+            stroke-opacity: 0.6;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background-color: #333;
+            border: 1px solid #555;
+            border-radius: 5px;
+            pointer-events: none;
+            color: white;
+            font-size: 14px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <h1>Algorand Transaction Flow</h1>
+    <h3 id="roundRange" style="text-align: center; color: #aaa; margin-top: -20px; margin-bottom: 30px;">From Round: <span id="startRound">...</span> to Round: <span id="endRound">...</span></h3>
+    <div id="chart"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load the JSON file that contains our data
+            fetch('hist_tx_alys_666.json')
+                .then(response => response.json())
+                .then(data => {
+                    // Update round information
+                    document.getElementById('startRound').textContent = data.startRound;
+                    document.getElementById('endRound').textContent = data.endRound;
+                    
+                    // Create visualization with actual data
+                    createVisualization(data.statistics, data.totalTransactions);
+                })
+                .catch(error => {
+                    console.error('Error loading data:', error);
+                    document.getElementById('startRound').textContent = 'Error';
+                    document.getElementById('endRound').textContent = 'Error';
+                });
+
+            function createVisualization(stats, totalTxs) {
+                // This function will be used to adjust node positions after the initial layout
+                function adjustSmallNodes(nodes, links) {
+                    // Identify small nodes (< 1% of total)
+                    const smallNodeIds = new Set();
+                    
+                    nodes.forEach(node => {
+                        if (node.value < totalTxs * 0.01) {
+                            smallNodeIds.add(node.id);
+                        }
+                    });
+                    
+                    // Group small nodes
+                    const smallNodes = nodes.filter(node => smallNodeIds.has(node.id));
+                    
+                    // Sort small nodes by y-position
+                    smallNodes.sort((a, b) => a.y0 - b.y0);
+                    
+                    // Adjust the spacing between small nodes
+                    const minSpace = 30; // Minimum pixels between small nodes
+                    
+                    for (let i = 1; i < smallNodes.length; i++) {
+                        const prev = smallNodes[i-1];
+                        const current = smallNodes[i];
+                        
+                        // If nodes are too close together
+                        if (current.y0 - prev.y1 < minSpace) {
+                            // Move current node down
+                            const shift = minSpace - (current.y0 - prev.y1);
+                            current.y0 += shift;
+                            current.y1 += shift;
+                            
+                            // Also adjust any subsequent small nodes
+                            for (let j = i + 1; j < smallNodes.length; j++) {
+                                smallNodes[j].y0 += shift;
+                                smallNodes[j].y1 += shift;
+                            }
+                        }
+                    }
+                    
+                    // Update the links connected to small nodes
+                    links.forEach(link => {
+                        if (smallNodeIds.has(link.target.id)) {
+                            // Adjust link path if target is a small node
+                            link.y1 = (link.target.y0 + link.target.y1) / 2;
+                        }
+                        if (smallNodeIds.has(link.source.id)) {
+                            // Adjust link path if source is a small node
+                            link.y0 = (link.source.y0 + link.source.y1) / 2;
+                        }
+                    });
+                    
+                    return { nodes, links };
+                }
+                
+                // Create data structure using real stats
+                const allNodes = [
+                    // Main transaction types
+                    {id: 0, name: "All Transactions"},
+                    {id: 1, name: "App Call"},
+                    {id: 2, name: "Asset Transfer"},
+                    {id: 3, name: "Pay"},
+                    {id: 4, name: "Asset Config"},
+                    {id: 5, name: "Heartbeat"},
+                    {id: 6, name: "State Proof"},
+                    {id: 7, name: "Key Reg"},
+                    {id: 8, name: "Asset Freeze"},
+
+                    // Asset Transfer subtypes
+                    {id: 9, name: "Asset Transfer"},
+                    {id: 10, name: "Opt-in"},
+                    {id: 11, name: "Opt-out"},
+                    {id: 12, name: "Clawback"},
+
+                    // Payment subtypes
+                    {id: 13, name: "Pay Algo"},
+                    {id: 14, name: "Close Account"},
+
+                    // Asset Config subtypes
+                    {id: 15, name: "Asset Creation"},
+                    {id: 16, name: "Asset Reconfigure"},
+                    {id: 17, name: "Asset Destroy"},
+
+                    // Key Registration subtypes
+                    {id: 18, name: "Key Reg Online"},
+                    {id: 19, name: "Key Reg Offline"},
+
+                    // Asset Freeze subtypes
+                    {id: 20, name: "Freeze"},
+                    {id: 21, name: "Unfreeze"},
+
+                    // Application Call subtypes
+                    {id: 22, name: "NoOp"},
+                    {id: 23, name: "App Opt-in"},
+                    {id: 24, name: "App Close Out"},
+                    {id: 25, name: "Clear State"},
+                    {id: 26, name: "Update App"},
+                    {id: 27, name: "Delete App"},
+                    {id: 28, name: "Create App"},
+                ];
+
+                const allLinks = [
+                    // Main transaction types from root
+                    {source: 0, target: 1, value: stats.appl.count},
+                    {source: 0, target: 2, value: stats.axfer.count}, 
+                    {source: 0, target: 3, value: stats.pay.count},
+                    {source: 0, target: 4, value: stats.acfg.count},
+                    {source: 0, target: 5, value: stats.hb.count},
+                    {source: 0, target: 6, value: stats.stpf.count},
+                    {source: 0, target: 7, value: stats.keyreg.count},
+                    {source: 0, target: 8, value: stats.afrz.count},
+                    
+                    // Asset Transfer subtypes
+                    {source: 2, target: 9, value: stats.axfer.subtypes.axfer},
+                    {source: 2, target: 10, value: stats.axfer.subtypes['opt-in']},
+                    {source: 2, target: 11, value: stats.axfer.subtypes['opt-out']},
+                    {source: 2, target: 12, value: stats.axfer.subtypes.clawback},
+                    
+                    // Payment subtypes
+                    {source: 3, target: 13, value: stats.pay.subtypes.pay},
+                    {source: 3, target: 14, value: stats.pay.subtypes.closeacc},
+                    
+                    // Asset Config subtypes
+                    {source: 4, target: 15, value: stats.acfg.subtypes.create},
+                    {source: 4, target: 16, value: stats.acfg.subtypes.reconfigure},
+                    {source: 4, target: 17, value: stats.acfg.subtypes.destroy},
+                    
+                    // Key Registration subtypes
+                    {source: 7, target: 18, value: stats.keyreg.subtypes.online},
+                    {source: 7, target: 19, value: stats.keyreg.subtypes.offline},
+                    
+                    // Asset Freeze subtypes
+                    {source: 8, target: 20, value: stats.afrz.subtypes.true},
+                    {source: 8, target: 21, value: stats.afrz.subtypes.false},
+
+                    // Application Call subtypes
+                    {source: 1, target: 22, value: stats.appl.subtypes.noop},
+                    {source: 1, target: 23, value: stats.appl.subtypes.optin},
+                    {source: 1, target: 24, value: stats.appl.subtypes.closeout},
+                    {source: 1, target: 25, value: stats.appl.subtypes.clear},
+                    {source: 1, target: 26, value: stats.appl.subtypes.update},
+                    {source: 1, target: 27, value: stats.appl.subtypes.delete},
+                    {source: 1, target: 28, value: stats.appl.subtypes.create},
+                ];
+
+                // Simple filtering: only keep links with values > 0
+                const activeLinks = allLinks.filter(link => link.value > 0);
+
+                // Get the nodes that are actually used in active links
+                const usedNodeIds = new Set();
+                usedNodeIds.add(0);  // Always keep the root node
+                activeLinks.forEach(link => {
+                    usedNodeIds.add(link.source);
+                    usedNodeIds.add(link.target);
+                });
+
+                // Filter nodes to only keep the ones that are used
+                const activeNodes = allNodes.filter(node => usedNodeIds.has(node.id));
+
+                const data = {
+                    nodes: activeNodes,
+                    links: activeLinks
+                };
+
+                // Make sure very small links are visible
+                data.links.forEach(link => {
+                    if (link.value < 100) {
+                        link.visualValue = 100; // Boost visual size but keep actual value
+                    }
+                });
+
+                // Colors for each node
+                const nodeColors = [
+                    "#888888", // All Transactions
+                    "#FF6384", // Application Call
+                    "#36A2EB", // Asset Transfer
+                    "#FFCE56", // Payment
+                    "#4BC0C0", // Asset Config
+                    "#9966FF", // Heartbeat
+                    "#FF9F40", // State Proof
+                    "#C9C9C9", // Key Registration
+                    "#5366FF", // Asset Freeze
+                    "#64B5F6", // Opt-in
+                    "#2196F3", // Clawback
+                    "#FFD54F", // Regular Payment
+                    "#80CBC4", // Asset Creation
+                    "#E0E0E0", // Key Reg (offline)
+                    "#7986CB",  // Asset Freeze (false)
+                    "#FF6384", // Asset Transfer Regular
+                    "#36A2EB", // Asset Opt-out
+                    "#4BC0C0", // Asset Reconfigure
+                    "#FFCE56", // Asset Destroy
+                    "#9966FF",  // Key Reg Online
+                    "#FF8A80", // NoOp
+                    "#FF80AB", // App Opt-in
+                    "#EA80FC", // App Close Out
+                    "#B388FF", // Clear State
+                    "#8C9EFF", // Update App
+                    "#82B1FF", // Delete App
+                    "#80D8FF", // Create App
+                ];
+
+                // Set up the SVG
+                const svg = d3.select("#chart").append("svg")
+                    .attr("width", "100%")
+                    .attr("height", "100%")
+                    .attr("viewBox", "0 0 1000 800");
+
+                // Create tooltip
+                const tooltip = d3.select("body").append("div")
+                    .attr("class", "tooltip")
+                    .style("opacity", 0);
+
+                // Set up the sankey generator
+                const sankey = d3.sankey()
+                    .nodeId(d => d.id)
+                    .nodeWidth(20)
+                    .nodePadding(25)
+                    .nodeSort((a, b) => {
+                        // Always keep "All Transactions" at the middle
+                        if (a.id === 0 || b.id === 0) return 0;
+                        // Always keep Application Call (id: 1) at the top
+                        if (a.id === 1) return -1;
+                        if (b.id === 1) return 1;
+                        // Application Call subtypes (ids: 22-28) go to the top
+                        if (a.id >= 22 && a.id <= 28) return -1;
+                        if (b.id >= 22 && b.id <= 28) return 1;
+                        // Other nodes sort by value as before
+                        return b.value - a.value;
+                    })
+                    .extent([[50, 50], [950, 650]]);
+
+                // Apply the sankey layout
+                let { nodes, links } = sankey(data);
+                
+                // Apply the adjustment for small nodes
+                ({ nodes, links } = adjustSmallNodes(nodes, links));
+                
+                // Draw the links
+                svg.append("g")
+                    .selectAll("path")
+                    .data(links)
+                    .join("path")
+                    .attr("class", "link")
+                    .attr("d", d3.sankeyLinkHorizontal())
+                    .style("stroke", d => nodeColors[d.source.id])
+                    .style("stroke-width", d => {
+                        // Make small links more visible
+                        return Math.max(3, d.width);
+                    })
+                    .style("opacity", 0.7)
+                    .on("mouseover", function(event, d) {
+                        const percent = (d.value / totalTxs * 100).toFixed(2);
+                        tooltip.transition()
+                            .duration(200)
+                            .style("opacity", 0.9);
+                        tooltip.html(`${d.source.name} → ${d.target.name}<br>${d.value} transactions<br>${percent}% of total`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", function() {
+                        tooltip.transition()
+                            .duration(500)
+                            .style("opacity", 0);
+                    });
+
+                // Draw the nodes
+                const node = svg.append("g")
+                    .selectAll("g")
+                    .data(nodes)
+                    .join("g")
+                    .attr("transform", d => `translate(${d.x0},${d.y0})`);
+
+                // Add rectangles for the nodes
+                node.append("rect")
+                    .attr("height", d => Math.max(d.y1 - d.y0, 5)) // Ensure nodes have minimum height
+                    .attr("width", d => d.x1 - d.x0)
+                    .attr("fill", d => nodeColors[d.id])
+                    .on("mouseover", function(event, d) {
+                        const percent = (d.value / totalTxs * 100).toFixed(2);
+                        tooltip.transition()
+                            .duration(200)
+                            .style("opacity", 0.9);
+                        tooltip.html(`${d.name}<br>${d.value} transactions<br>${percent}% of total`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", function() {
+                        tooltip.transition()
+                            .duration(500)
+                            .style("opacity", 0);
+                    });
+
+                // Add labels
+                node.append("text")
+                    .attr("x", d => d.x0 < 500 ? 6 + (d.x1 - d.x0) : -6)
+                    .attr("y", d => (d.y1 - d.y0) / 2)
+                    .attr("dy", "0.35em")
+                    .attr("text-anchor", d => d.x0 < 500 ? "start" : "end")
+                    .text(d => {
+                        const percent = (d.value / totalTxs * 100).toFixed(1);
+                        // For larger numbers, format with commas and abbreviate if needed
+                        const formattedValue = d.value >= 1000 ? 
+                            `${Math.round(d.value/1000)}k` : d.value;
+                        return `${d.name} ${percent}%  ${formattedValue}`;
+                    })
+                    .style("fill", "white")
+                    .style("font-weight", "bold")
+                    .style("text-shadow", "1px 1px 2px black");
+            }
+        });
+    </script>
+</body>
+</html>

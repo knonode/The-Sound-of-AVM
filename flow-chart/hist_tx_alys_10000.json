@@ -1,0 +1,57 @@
+{
+  "totalTransactions": 486678,
+  "startRound": 48532645,
+  "endRound": 48542645,
+  "roundsAnalyzed": 10000,
+  "statistics": {
+    "pay": {
+      "count": 169704,
+      "subtypes": {
+        "pay": 169704,
+        "closeacc": 0
+      }
+    },
+    "axfer": {
+      "count": 140283,
+      "subtypes": {
+        "opt-in": 121,
+        "opt-out": 0,
+        "axfer": 139871,
+        "clawback": 291
+      }
+    },
+    "appl": {
+      "count": 174842
+    },
+    "acfg": {
+      "count": 1286,
+      "subtypes": {
+        "create": 1259,
+        "reconfigure": 27,
+        "destroy": 0
+      }
+    },
+    "keyreg": {
+      "count": 19,
+      "subtypes": {
+        "online": 0,
+        "offline": 19
+      }
+    },
+    "afrz": {
+      "count": 11,
+      "subtypes": {
+        "true": 0,
+        "false": 11
+      }
+    },
+    "stpf": {
+      "count": 37
+    },
+    "hb": {
+      "count": 496
+    }
+  },
+  "timestamp": "2025-03-30T16:38:16.116Z",
+  "processingTime": "0h 41m 30s"
+}

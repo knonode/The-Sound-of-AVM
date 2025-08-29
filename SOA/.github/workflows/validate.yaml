@@ -1,0 +1,14 @@
+name: Pull Request validation
+
+on: [pull_request]
+
+
+jobs:
+  SOA-contracts-ci:
+    name: Run SOA-contracts validation
+    uses: ./.github/workflows/SOA-contracts-ci.yaml
+
+  SOA-frontend-ci:
+    name: Run SOA-frontend validation
+    uses: ./.github/workflows/SOA-frontend-ci.yaml
+

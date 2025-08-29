@@ -1,0 +1,9 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 0.3.4
+_src_path: gh:algorandfoundation/algokit-typescript-template
+author_email: algohmp@gmail.com
+author_name: knonode
+contract_name: mint_preset
+preset_name: production
+project_name: SOA-contracts
+

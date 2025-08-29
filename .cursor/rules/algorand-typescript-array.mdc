@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Algorand TypeScript array usage
+
+- Do:
+   - Use immutable arrays with explicit type annotations
+      - Declare with array literal syntax: `const myArray: uint64[] = [1, 2, 3]`
+   - Use spread operator for "mutations"
+      - Instead of push: `myArray = [...myArray, newValue]`
+   
+- Don't:
+   - Don't mutate arrays directly (push, pop, splice)
+   - Don't use array methods that modify the array in place
+   - Don't use array.map
+   - Don't use array.forEach

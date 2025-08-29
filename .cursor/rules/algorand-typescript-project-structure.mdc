@@ -1,0 +1,37 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+#Algorand Smart Contract Development Standards
+
+Standards for Algorand smart contract development in this project.
+
+## Project structure
+- Don't:
+   - reference @algorandfoundation/tealscript
+   - use TEALscript
+   - add empty @abimethod decorator
+   - add @abimethod decorator for Noop
+- Do:
+   - Use @algorandfoundation/algorand-typescript 
+   - use algorand typescript
+   - always export the smart contract class
+   - always use file extension .algo.ts
+   - folder name is snake_case
+   - file name is kebab-case
+
+- Good example
+```
+import { Contract } from "@algorandfoundation/algorand-typescript";
+
+export class HelloWorldContract extends Contract {
+  sayHello(name: string): string {
+    return `${this.getHello()} ${name}`;
+  }
+
+  private getHello() {
+    return "Hello";
+  }
+}
+```

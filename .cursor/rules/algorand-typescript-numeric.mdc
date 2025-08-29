@@ -1,0 +1,32 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Algorand TypeScript numeric usage
+
+- Do:
+   - Use uint64 for Standard Integers
+      - Use for numbers that fit within 64-bit unsigned integers
+      - Can be declared with numeric literals and type annotations
+      - Use the Uint64 factory method for explicit creation
+   - Use biguint for Large Numbers
+      - Use when dealing with integers larger than 64-bit (up to 512-bit)
+      - Declare with bigint literals (numbers with 'n' suffix)
+      - Use the BigUint factory method
+   - Use Type Annotations
+      - Always use type annotations when performing math operations
+      - Explicitly type variables when the type cannot be inferred
+      - Explicitly type for the indices of `for` loop
+   - Use Factory Methods
+      - Use Uint64() for creating uint64 values
+      - Use BigUint() for creating biguint values
+- Don't:
+   - Don't Use Large Numbers Without biguint
+      - Avoid using regular numbers for values larger than 64-bit
+   - Don't Ignore Overflow/Underflow
+      - uint64 will error on both underflow (negative values) and overflow (values larger than 64-bit)
+   - Don't Use biguint Unnecessarily
+      - Don't use biguint when uint64 would suffice, as biguint operations are more expensive in terms of opcode budget (by an order of magnitude)
+   - Don't Rely on Type Inference for Math Operations
+      - Don't assume TypeScript will correctly infer types for math operations - always provide type annotations

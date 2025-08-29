@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algorand Transaction Sonifier</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎛️</text></svg>">
+    <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #004d4d, #001a1a);
+            color: #eee;
+            margin: 0;
+            padding: 10px;
+            font-size: 12px;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center; /* Center align items vertically */
+            padding: 3px 8px; /* Reduced from 5px 10px */
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            margin-bottom: 8px; /* Reduced from 10px */
+            flex-wrap: wrap; /* Allow wrapping on very small screens */
+            gap: 5px; /* Add gap for wrapped elements */
+        }
+
+        .top-bar h1 {
+            margin: 0; /* Remove default margin */
+            font-size: 16px; /* Smaller title */
+            white-space: nowrap; /* Prevent text wrapping */
+            flex-shrink: 0; /* Prevent title from shrinking */
+        }
+
+        .controls {
+            display: flex;
+            gap: 3px; /* Reduced from 5px */
+            flex-wrap: wrap; /* Allow buttons to wrap if needed */
+        }
+
+        button {
+            background-color: #006666;
+            color: white;
+            border: none;
+            padding: 3px 6px; /* Reduced from 5px 10px */
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px; /* Smaller font */
+            white-space: nowrap; /* Prevent text wrapping */
+            transition: background-color 0.2s;
+        }
+        button:disabled,
+        .disabled,
+        [aria-disabled="true"] {
+            background-color: #444 !important;
+            color: #bbb !important;
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        button:hover {
+            background-color: #009999;
+        }
+
+        .synth-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Responsive columns */
+            gap: 7px;
+        }
+
+        .mini-synth {
+            background-color: rgba(0, 77, 77, 0.5);
+            border-radius: 4px;
+            padding: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            margin-bottom: 7px;
+            display: flex; /* Allow sections to grow */
+            flex-direction: column; /* Stack sections vertically */
+            transition: background-color 0.3s ease; /* Add smooth transition */
+        }
+
+        /* Type-specific background colors */
+        .mini-synth.synth-pay { background-color: rgba(127, 150, 150, 0.7); }
+        .mini-synth.synth-axfer { background-color: rgba(83, 55, 55, 0.705); }
+        .mini-synth.synth-appl { background-color: rgba(0, 100, 70, 0.7); }
+        .mini-synth.synth-acfg { background-color: rgba(179, 133, 201, 0.507); }
+        .mini-synth.synth-keyreg { background-color: rgb(212, 200, 147); }
+        .mini-synth.synth-afrz { background-color: rgba(38, 53, 189, 0.514); }
+        .mini-synth.synth-stpf { background-color: rgba(14, 61, 59, 0.493); }
+        .mini-synth.synth-hb { background-color: rgba(233, 87, 87, 0.589); }
+        /* Add more rules if other main types exist */
+
+        .synth-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #006666;
+            padding-bottom: 3px;
+            flex-shrink: 0;
+            gap: 3px; /* Reduced gap */
+        }
+
+        .led {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #333;
+            margin-right: 0; /* Remove default margin if any */
+        }
+
+        .led.active {
+            background-color: #00ff00;
+            box-shadow: 0 0 3px #00ff00;
+        }
+
+        .control-label {
+            font-size: 10px;
+            display: inline-block;
+            width: 100%;
+            text-align: center;
+            margin-bottom: 1px;
+            white-space: nowrap; /* Prevent wrapping */
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 3px;
+            gap: 5px; /* Add gap between elements in a row (like ADSR inputs) */
+        }
+
+        /* Target specifically rows with side-by-side labels for ADSR */
+         .adsr-section .control-row:nth-child(1) .control-label,
+         .adsr-section .control-row:nth-child(3) .control-label {
+             width: 50%; /* Make ADSR labels share space */
+         }
+
+        .control-row input[type="range"] {
+            width: 100%; /* Take full width within its container */
+            height: 5px;
+        }
+
+        /* Style for all control sections */
+        .volume-section, .base-note-section, .gate-section, .adsr-section, .waveform-section, .pitch-section, .delay-section, .effect-controls, .reverb-section, .lfo-section, .compressor-section, .eq-section, .limiter-section {
+            margin-top: 5px;
+            padding-top: 3px;
+            border-top: 1px dashed #006666;
+        }
+
+        select.waveform-select { /* More specific selector */
+            background-color: #004d4d;
+            color: white;
+            border: none;
+            padding: 2px;
+            border-radius: 3px;
+            width: 100%;
+            font-size: 10px;
+            box-sizing: border-box; /* Include padding in width */
+        }
+
+        /* Value display spans nested inside control labels */
+        .control-label span[id$="-value"] {
+            font-size: 10px;
+            background: rgba(0,0,0,0.2);
+            padding: 1px 3px;
+            border-radius: 2px;
+            text-align: center;
+            min-width: 25px; /* Slightly wider */
+            display: inline-block; /* Allow width */
+            margin-left: 3px; /* Space from label text */
+        }
+
+        .status-container, .preset-container {
+            margin-top: 10px;
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .actions-bar {
+            margin: 6px 0; /* Reduced from 10px 0 */
+            display: flex;
+            justify-content: flex-end;
+            align-items: center; /* Center align items vertically */
+            gap: 5px; /* Reduced from 10px */
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+        }
+
+        .toggle-btn {
+            background-color: #004d4d;
+            padding: 3px 6px; /* Reduced padding to match other buttons */
+            font-size: 11px; /* Smaller font */
+            white-space: nowrap;
+        }
+
+        .toggle-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Specific styling for base note controls row */
+        .base-note-controls {
+            justify-content: space-between; /* Space out buttons and display */
+            align-items: center;
+        }
+        .base-note-controls button {
+            padding: 1px 5px; /* Smaller padding */
+            font-size: 12px; /* Larger font for arrows */
+            line-height: 1; /* Adjust line height */
+            min-width: 20px;
+        }
+        .base-note-display {
+            font-weight: bold;
+            font-size: 11px;
+            background: rgba(0,0,0,0.15);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        /* Style for the new type counts container */
+        #type-counts-container {
+            margin-top: 8px; /* Add some space above the counts */
+            padding-top: 5px;
+            border-top: 1px solid rgba(0, 102, 102, 0.5); /* Subtle separator */
+            display: flex; /* Arrange counts horizontally */
+            flex-wrap: wrap; /* Allow wrapping */
+            gap: 10px; /* Space between counts */
+            font-size: 10px; /* Smaller font for counts */
+        }
+        .type-count {
+            /* Optional: Add styling per count item if needed */
+             background-color: rgba(0,0,0,0.1);
+             padding: 2px 5px;
+             border-radius: 3px;
+        }
+
+        .persistent-count {
+            margin-top: 8px;
+            font-size: 10px;
+            color: #aaa;
+            border-top: 1px solid #003333;
+            padding-top: 8px;
+        }
+
+        /* Update styles for header icon buttons to work better with SVG */
+        .synth-header .mute-btn,
+        .synth-header .close-btn {
+            background-color: transparent;
+            border: none;
+            color: #ccc; /* Light gray icon/text color */
+            padding: 0; /* Remove padding */
+            margin-left: 0; /* Remove specific margin-left */
+            font-size: 16px; /* Adjust base size for SVG */
+            line-height: 1;
+            cursor: pointer;
+            transition: color 0.2s ease;
+            /* Add vertical alignment */
+            vertical-align: middle;
+            width: 1.2em; /* Give explicit width */
+            height: 1.2em; /* Give explicit height */
+            display: inline-flex; /* Helps with alignment */
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0; /* Prevent buttons from shrinking */
+        }
+
+        .synth-header .mute-btn:hover,
+        .synth-header .close-btn:hover {
+            color: #fff; /* Brighter color on hover */
+        }
+
+        /* Ensure SVG inside the button scales correctly */
+        .synth-header .mute-btn svg {
+             width: 1em; /* Make SVG size relative to font-size */
+             height: 1em;
+        }
+
+        .synth-header .type-select {
+             flex-grow: 0;
+             flex-shrink: 1; /* Allow shrinking */
+             flex-basis: auto;
+             max-width: 60px; /* Further reduced max width */
+             min-width: 45px; /* Further reduced min width */
+        }
+        .synth-header .subtype-select {
+             flex-grow: 0;
+             flex-shrink: 1; /* Allow shrinking */
+             flex-basis: auto;
+             max-width: 65px; /* Further reduced max width */
+             min-width: 45px; /* Further reduced min width */
+         }
+
+        /* Minimal style for selects in header */
+        .synth-header select {
+            background-color: rgba(0, 0, 0, 0.2); /* Darker transparent background */
+            color: #029e0a;
+            border: 1px solid #004d4d; /* Subtle border matching theme */
+            padding: 1px 2px; /* Slightly adjust padding if needed */
+            padding-right: 1em; /* Reduced space for arrow */
+            border-radius: 3px;
+            font-size: 10px;
+            -webkit-appearance: none; /* Remove default styling */
+            -moz-appearance: none;
+            appearance: none;
+            /* Add custom arrow or leave it minimal */
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ccc%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat;
+            background-position: right 3px top 50%; /* Adjusted position slightly for smaller padding */
+            background-size: .6em auto; /* Slightly smaller arrow */
+        }
+
+        /* Parameter Area Styling */
+        .parameter-area {
+            margin-top: 8px;
+            padding: 8px 5px;
+            border-top: 1px dashed #006666;
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 0 0 4px 4px; /* Match bottom corners */
+            min-height: 30px; /* Ensure it has some height even when empty */
+            font-size: 10px;
+        }
+        .param-control {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .param-control label {
+            flex-basis: 60px; /* Fixed width for labels */
+            flex-shrink: 0;
+            margin-right: 5px; /* Reverted */
+            text-align: left; /* Reverted */
+            white-space: nowrap;
+        }
+        .param-input {
+            width: 100%; /* Take remaining space */
+            min-width: 0; /* <<< Allow input to shrink below content size >>> */
+            background-color: #004d4d;
+            color: rgb(203, 226, 228);
+            border: 1px solid #006666;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 10px;
+            box-sizing: border-box;
+        }
+        .param-input.number-input {
+            max-width: 60px; /* Limit width for number inputs */
+        }
+        .no-params {
+            color: #888; /* Dim text */
+            font-style: italic;
+        }
+        .keyreg-toggle {
+             /* Basic button styling, can be enhanced */
+             background-color: #004d4d;
+             color: white;
+             border: 1px solid #006666;
+             padding: 2px 5px;
+             border-radius: 3px;
+             cursor: pointer;
+        }
+        .sequencer-steps {
+            display: flex;
+            justify-content: space-between; /* Distribute steps evenly */
+            gap: 2px; /* Small gap between steps */
+        }
+        .seq-step {
+            flex: 1; /* Allow steps to grow/shrink equally */
+            text-align: center; /* Center input and indicator */
+            position: relative; /* For indicator positioning */
+        }
+        .seq-input {
+            width: 90%; /* Relative width within the step container */
+            max-width: 30px; /* Max width to keep them small */
+            padding: 1px 2px; /* Minimal padding */
+            text-align: center;
+            background-color: #004d4d; /* Match other inputs */
+            color: #eee;
+            border: 1px solid #006666; /* Match other inputs */
+            border-radius: 3px;
+            box-sizing: border-box;
+            font-size: 10px; /* Match other inputs */
+            -moz-appearance: textfield; /* Firefox */
+            appearance: textfield; /* Standard property */
+        }
+        /* Hide number input spinners */
+        .seq-input::-webkit-outer-spin-button,
+        .seq-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .seq-indicator {
+            width: 6px;
+            height: 3px;
+            background-color: #555; /* Dimmed indicator */
+            border-radius: 1px;
+            margin: 1px auto 0; /* Small space below input */
+            transition: background-color 0.05s ease-in-out;
+        }
+        .seq-indicator.active {
+            background-color: #0f0; /* Bright green when active */
+        }
+        /* --- END: Sequencer Input Styles --- */
+
+        /* <<< NEW/MODIFIED: Style for compact dropdowns >>> */
+        .compact-select {
+            background-color: rgba(0, 0, 0, 0.2); /* Darker transparent background */
+            color: #029e0a; /* Green font */
+            border: 1px solid #004d4d; /* Subtle border matching theme */
+            padding: 1px 2px; /* Slightly adjust padding */
+            padding-right: 1em; /* Space for arrow */
+            border-radius: 3px;
+            font-size: 10px;
+            -webkit-appearance: none; /* Remove default styling */
+            -moz-appearance: none;
+            appearance: none;
+            /* Custom arrow */
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ccc%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat;
+            background-position: right 3px top 50%;
+            background-size: .6em auto;
+             /* Ensure it works within flex layout */
+             flex-grow: 1; /* Allow select to take available space in its row */
+             min-width: 50px; /* Give it a minimum width */
+        }
+
+        /* Optional: Apply compact style to header selects by default */
+        .synth-header .type-select,
+        .synth-header .subtype-select {
+             /* You might not need specific styles here anymore */
+             /* Or you could add: @extend .compact-select; if using a preprocessor */
+             /* For plain CSS, ensure .compact-select styles are sufficient */
+             /* or re-apply specific flex properties if needed */
+             flex-grow: 0;
+             flex-shrink: 1;
+             flex-basis: auto;
+             max-width: 65px;
+             min-width: 45px;
+             /* Re-apply compact styles if needed, or ensure they are inherited */
+             background-color: rgba(0, 0, 0, 0.2);
+             color: #029e0a;
+             border: 1px solid #004d4d;
+             padding: 1px 2px;
+             padding-right: 1em;
+             border-radius: 3px;
+             font-size: 10px;
+             -webkit-appearance: none;
+             -moz-appearance: none;
+             appearance: none;
+             background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ccc%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+             background-repeat: no-repeat;
+             background-position: right 3px top 50%;
+             background-size: .6em auto;
+        }
+
+        /* Ensure labels next to compact selects behave */
+        .control-row .inline-label {
+             width: auto; /* Override potential width: 100% */
+             flex-shrink: 0; /* Don't shrink label */
+             margin-right: 5px; /* Space between label and select */
+             text-align: left;
+        }
+
+        /* Add this to your existing CSS */
+        .synth-block {
+            border-left: 4px solid #00FF00; /* Green for new blocks */
+            background: linear-gradient(135deg, rgba(0, 255, 0, 0.1) 0%, rgba(0, 255, 0, 0.05) 100%);
+        }
+
+        .synth-block .led.active {
+            background-color: #00FF00;
+            box-shadow: 0 0 10px #00FF00;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+            padding-top: 60px;
+        }
+        .modal-content {
+            background-color: #002b2b;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #009999;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 450px;
+            position: relative;
+        }
+        .modal-close {
+            color: #aaa;
+            position: absolute;
+            top: 5px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .modal-close:hover,
+        .modal-close:focus {
+            color: white;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .modal-content h2 { margin-top: 0; }
+        .modal-content input[type="text"], .modal-content input[type="file"] {
+            width: calc(100% - 12px);
+            padding: 5px;
+            margin-bottom: 10px;
+            background-color: #004d4d;
+            border: 1px solid #006666;
+            color: white;
+            border-radius: 3px;
+        }
+        .modal-options { margin: 15px 0; }
+        .modal-options label { cursor: pointer; }
+        .modal-buttons { display: flex; flex-direction: column; gap: 10px; }
+        .modal-buttons button { width: 100%; }
+        .modal-content hr { border-color: #006666; margin: 15px 0; }
+
+        /* <<< NEW: Style for the Master Synth >>> */
+        .master-synth {
+            border: 2px solid #010e0b; /* A bright, distinct border */
+            background-color: rgba(0, 50, 50, 0.6);
+        }
+
+        /* Add these styles in the <style> section */
+        .api-buttons {
+            display: flex;
+            gap: 3px; /* Reduced from 5px */
+            flex-wrap: wrap; /* Allow API buttons to wrap */
+        }
+
+        .api-btn {
+            padding: 4px 8px; /* Reduced from 8px 12px */
+            background-color: #003333;
+            color: #00cccc;
+            border: 1px solid #006666;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px; /* Reduced from 12px */
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .api-btn:hover {
+            background-color: #004444;
+            border-color: #00aaaa;
+        }
+
+        .api-btn.active {
+            background-color: #006666;
+            color: white;
+            border-color: #00cccc;
+        }
+
+        .api-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .countdown-value {
+            display: block;
+            text-align: center;
+            font-size: 16px; /* Bigger than the default 10px */
+            color: #43b38d; /* Light greenish color */
+            font-weight: bold;
+            font-family: 'Courier New', monospace; /* Monospace for better number display */
+            width: 100%; /* Take full width of its container */
+        }
+
+        .current-round-value {
+            display: block;
+            text-align: center;
+            font-size: 16px;
+            color: #43b38d; /* Same light greenish color as countdown */
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            width: 100%;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <h1>Algorand TX Sonifier</h1>
+        <div class="controls">
+            <button id="start-btn">Start</button>
+            <button id="stop-btn">Stop</button>
+            <button id="record-btn" disabled>Record</button>
+            <button id="save-preset">Save Preset</button>
+            <button id="load-preset">Load Preset</button>
+            <button id="wallet-connect">Wallet</button>
+        </div>
+    </div>
+
+    <div class="actions-bar">
+        <button id="toggle-aggr-btn" class="toggle-btn" disabled>Aggr Txs</button>
+        <div class="api-buttons">
+            <button id="algoranding-btn" class="api-btn active">Algoranding</button>
+            <button id="nodely-btn" class="api-btn" disabled>Nodely</button>
+            <button id="user-node-btn" class="api-btn">Your Node</button>
+        </div>
+        <button id="add-synth">+ Add Synth</button>
+    </div>
+
+    <div class="synth-grid" id="synth-container">
+        <!-- All Synths (including Master) will be dynamically added here -->
+    </div>
+
+    <div class="status-container">
+        <h3>Transaction Stream Status</h3>
+        <div id="status">Ready</div>
+        <div id="transaction-count">0 transactions processed</div>
+        <div id="type-counts-container">
+            <!-- Counts will be dynamically populated here by JS -->
+        </div>
+        <div id="persistent-tx-count" class="persistent-count">Lifetime Txs: 0</div>
+        <div id="persistent-block-count" class="persistent-count">Lifetime Blocks: 0</div>
+    </div>
+
+    <!-- Modal for Loading Presets -->
+    <div id="load-preset-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="load-modal-close">&times;</span>
+
+            <!-- User's Preset NFTs Section -->
+            <h3> Your NFPresets</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 14px; color: #666;">Wallet presets</span>
+                <button id="refresh-nft-presets-btn" style="font-size: 12px; color: #006666; background: none; border: none; cursor: pointer; text-decoration: underline;">Refresh</button>
+            </div>
+            <div id="user-nft-presets-container" style="max-height: 200px; overflow-y: auto; margin-bottom: 16px;">
+                <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">
+                    <p>No NFPresets found in your wallet</p>
+                    <p style="font-size: 12px; margin-top: 4px;">Mint some NFPresets first to see them here</p>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- Legacy Preset Buttons Section -->
+            <h3>Local & Server Presets</h3>
+            <div id="modal-preset-buttons" class="modal-buttons">
+                <!-- Preset buttons will be dynamically added here by the script -->
+            </div>
+
+            <hr>
+
+            <h3>Or Upload File</h3>
+            <input type="file" id="preset-file-input" accept=".json">
+
+            <!-- Error Display -->
+            <div id="load-error-display" style="display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px; padding: 8px; margin-top: 12px;">
+                <p id="load-error-text" style="color: #dc2626; font-size: 12px; margin: 0;"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Saving Presets -->
+    <div id="save-preset-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="save-modal-close">&times;</span>
+            <h2>Save Preset Layout</h2>
+            <input type="text" id="new-preset-name" placeholder="Enter preset name...">
+            <div class="modal-options">
+                <input type="checkbox" id="download-json-toggle" style="vertical-align: middle;">
+                <label for="download-json-toggle">Download as .json file</label>
+            </div>
+            <div class="modal-buttons">
+                <button id="save-new-preset-btn">Save Locally</button>
+            </div>
+
+            <hr style="margin: 12px 0; opacity: 0.4;" />
+
+            <h3>Or Mint NFPreset on-chain</h3>
+            <input type="text" id="nfpreset-nft-name" placeholder="NFP Name (max 32)" maxlength="32" style="width: 100%; margin-bottom: 6px;" />
+            <input type="text" id="nfpreset-unit-name" placeholder="Unit Name (max 8)" maxlength="8" style="width: 100%; margin-bottom: 6px;" />
+            <input type="number" id="nfpreset-supply" placeholder="Supply (default 1)" min="1" max="1000" style="width: 100%; margin-bottom: 6px;" />
+            <input type="text" id="nfpreset-ipfs-token" placeholder="Pinata JWT Token (for IPFS metadata)" style="width: 100%; margin-bottom: 6px;" autocomplete="off" data-form-type="other" />
+            <div style="font-size: 11px; color: #666; margin-bottom: 6px; line-height: 1.3;">
+              Get your free Pinata JWT token at <a href="https://app.pinata.cloud/developers/api-keys" target="_blank" style="color: #006666;">app.pinata.cloud/developers/api-keys</a>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label for="nfpreset-image-input" style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">NFT Image (optional - will use placeholder if not selected)</label>
+              <input type="file" id="nfpreset-image-input" accept="image/*" style="width: 100%; font-size: 12px;" />
+            </div>
+            <div class="modal-buttons">
+                <button id="mint-nfpreset-btn">Mint NFPreset</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for API Token Input -->
+    <div id="api-token-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="token-modal-close">&times;</span>
+            <h2>Connect to Your Algorand Node</h2>
+
+            <div class="instructions">
+                <h3>⚠️ Important: Same Machine Only</h3>
+                <p><strong>Your node connection only works on the same device/network as your Algorand node.</strong> If you're on a different device, use "Algoranding" or "Nodely" instead.</p>
+
+                <h3>⚙️ Required Node Configuration</h3>
+                <p>Before using your local node, you must enable CORS headers. Add this to your Algorand node config.json:</p>
+                <code>"EnablePrivateNetworkAccessHeader": true</code>
+                <p><strong>Then restart your Algorand node.</strong></p>
+
+                <h3>🔑 API Token</h3>
+                <p>Enter your node's API token below. This will be saved in your browser's local storage.</p>
+            </div>
+
+            <input type="text" id="api-token-input" placeholder="Your API token...">
+
+            <div class="modal-buttons">
+                <button id="save-api-token-btn">Save and Use Token</button>
+            </div>
+
+            <div class="help-text">
+                <small>💡 <strong>Why this is needed:</strong> Modern browsers block websites from accessing localhost for security. The configuration above tells your node to allow this connection.</small>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/algorand-api.js"></script>
+    <script type="module" src="/tone-synthesis.js"></script>
+    <script type="module" src="/proto-synth.js?t=1234567890"></script>
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+      </script>
+  <script type="module">
+    const walletBtn = document.getElementById('wallet-connect');
+    walletBtn?.addEventListener('click', () => {
+      window.parent.postMessage({ type: 'OPEN_WALLET_MODAL' }, '*');
+    });
+  </script>
+</body>
+</html>
