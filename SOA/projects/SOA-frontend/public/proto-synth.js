@@ -28,7 +28,8 @@ import {
     scaleLfoDepth,
     synthsInitialized,
     isMasterMuted,
-    masterVolumeBeforeMute
+    masterVolumeBeforeMute,
+    unlockIOSAudioOnce
 } from './tone-synthesis.js';
 
 // UI and application state (non-synthesis)
@@ -1242,7 +1243,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Attach main control listeners
-  startBtn.addEventListener('click', () => {
+  startBtn.addEventListener('click', async () => {
+    try { await unlockIOSAudioOnce?.(); } catch {}
     startTransactionStream();
   });
   stopBtn.addEventListener('click', () => {

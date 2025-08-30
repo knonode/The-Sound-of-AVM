@@ -7,8 +7,16 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎛️</text></svg>">
     <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
     <style>
+        @font-face {
+            font-family: 'Berkeley Mono Trial';
+            src: url('/assets/BerkeleyMonoTrial-Regular.ttf') format('truetype');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Berkeley Mono Trial', Arial, sans-serif;
             background: linear-gradient(135deg, #004d4d, #001a1a);
             color: #eee;
             margin: 0;
@@ -455,6 +463,11 @@
              background-repeat: no-repeat;
              background-position: right 3px top 50%;
              background-size: .6em auto;
+        }
+
+        /* Ensure form controls use the custom font (override inline styles) */
+        button, input, select, textarea {
+            font-family: 'Berkeley Mono Trial', Arial, sans-serif !important;
         }
 
         /* Ensure labels next to compact selects behave */

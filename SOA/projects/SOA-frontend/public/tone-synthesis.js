@@ -9,6 +9,24 @@ let masterEQ, masterCompressor, masterLimiter;
 let isMasterMuted = false;
 let masterVolumeBeforeMute = -3.0;
 
+let iOSMediaUnlocked = false;
+async function unlockIOSAudioOnce() {
+  if (iOSMediaUnlocked) return;
+  try {
+    const el = document.createElement('audio');
+    el.src =
+      'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAACAAACcQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=='; // very short silence
+    el.muted = true;
+    el.playsInline = true;
+    el.preload = 'auto';
+    await el.play().catch(() => {});
+    el.pause();
+    iOSMediaUnlocked = true;
+  } catch (e) {
+    console.warn('iOS media unlock failed', e);
+  }
+}
+
 // Core synthesis functions
 
 // Scales a 0-100 depth value to an appropriate modulation range for a target
@@ -157,6 +175,7 @@ async function initAudio() {
 
 
   try {
+    await unlockIOSAudioOnce();   // ensure iOS is unlocked before Tone.start()
     await Tone.start();
 
       // <<< NEW: Initialize Master FX Chain >>>
@@ -419,7 +438,8 @@ export {
     updateMasterEQ,
     updateMasterCompressor,
     updateMasterLimiter,
-    scaleLfoDepth
+    scaleLfoDepth,
+    unlockIOSAudioOnce
 };
 
 // Export state for debugging/UI purposes

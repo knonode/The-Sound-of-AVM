@@ -17,36 +17,36 @@ function I() {
   };
 }
 const i = I();
-let a = i.defaultMempoolMode, d = i.defaultBlockMode, f = i.algodToken, y = null, p = null, g = 0, c = 0, w = !1;
+let a = i.defaultMempoolMode, d = i.defaultBlockMode, f = i.algodToken, w = null, y = null, g = 0, c = 0, h = !1;
 async function P() {
-  const o = await R(), e = await C();
-  return console.log(`Mempool connection (${a}): ${o ? "✅" : "❌"}`), console.log(`Block connection (${d}): ${e ? "✅" : "❌"}`), o && e;
+  const o = await R(), t = await C();
+  return console.log(`Mempool connection (${a}): ${o ? "✅" : "❌"}`), console.log(`Block connection (${d}): ${t ? "✅" : "❌"}`), o && t;
 }
 async function R() {
-  let o, e;
+  let o, t;
   if (a === "algoranding") {
-    const n = $("");
-    o = n.url, e = n.headers;
+    const e = $("");
+    o = e.url, t = e.headers;
   } else {
-    const n = $("/v2/transactions/pending");
-    o = n.url, e = n.headers;
+    const e = $("/v2/transactions/pending");
+    o = e.url, t = e.headers;
   }
   try {
-    console.log(`Testing mempool connection to ${a} at ${o}...`), console.log("Headers being sent:", e);
-    const n = await fetch(o, { headers: e });
-    if (n.ok) {
-      const t = await n.json();
-      if (console.log("✅ Mempool connection successful"), a === "algoranding" && t.stats) {
-        const r = t.stats;
+    console.log(`Testing mempool connection to ${a} at ${o}...`), console.log("Headers being sent:", t);
+    const e = await fetch(o, { headers: t });
+    if (e.ok) {
+      const n = await e.json();
+      if (console.log("✅ Mempool connection successful"), a === "algoranding" && n.stats) {
+        const r = n.stats;
         console.log(`Algoranding stats: ${r.totalInPool} total, ${r.shown} shown, ${r.coverage}% coverage`);
       }
       return !0;
     } else {
-      const t = await n.text();
-      return console.error(`❌ Mempool connection failed: ${n.status} ${n.statusText}`), console.error("Response body:", t), !1;
+      const n = await e.text();
+      return console.error(`❌ Mempool connection failed: ${e.status} ${e.statusText}`), console.error("Response body:", n), !1;
     }
-  } catch (n) {
-    return console.error("❌ Mempool connection error:", n), !1;
+  } catch (e) {
+    return console.error("❌ Mempool connection error:", e), !1;
   }
 }
 async function C() {
@@ -54,99 +54,102 @@ async function C() {
   const o = m("/v2/status");
   if (!o)
     return console.error("❌ Block connection failed: No valid block API configuration"), !1;
-  const { url: e, headers: n } = o;
-  console.log("Block connection headers:", n);
+  const { url: t, headers: e } = o;
+  console.log("Block connection headers:", e);
   try {
-    const t = await fetch(e, { headers: n });
-    if (t.ok) {
-      const r = await t.json();
+    const n = await fetch(t, { headers: e });
+    if (n.ok) {
+      const r = await n.json();
       return console.log("✅ Block connection successful:", r), !0;
     } else
-      return console.error(`❌ Block connection failed: ${t.status} ${t.statusText}`), !1;
-  } catch (t) {
-    return console.error("❌ Block connection error:", t), !1;
+      return console.error(`❌ Block connection failed: ${n.status} ${n.statusText}`), !1;
+  } catch (n) {
+    return console.error("❌ Block connection error:", n), !1;
   }
 }
 async function B() {
-  let o, e;
+  let o, t;
   if (a === "algoranding") {
-    const n = $("");
-    o = n.url, e = n.headers;
+    const e = $("");
+    o = e.url, t = e.headers;
   } else {
-    const n = $("/v2/transactions/pending");
-    o = n.url, e = n.headers;
+    const e = $("/v2/transactions/pending");
+    o = e.url, t = e.headers;
   }
   try {
-    const n = await fetch(o, { headers: e });
-    if (n.ok) {
-      const t = await n.json();
+    const e = await fetch(o, { headers: t });
+    if (e.ok) {
+      const n = await e.json();
       let r = [];
       if (a === "algoranding")
-        t && t.transactions && Array.isArray(t.transactions) && (r = t.transactions);
+        n && n.transactions && Array.isArray(n.transactions) && (r = n.transactions);
       else {
-        const s = t;
+        const s = n;
         s && s.top && Array.isArray(s.top) ? r = s.top : s && s["top-transactions"] && Array.isArray(s["top-transactions"]) ? r = s["top-transactions"] : s && Array.isArray(s) && (r = s);
       }
       return r;
     } else
-      return console.error(`Failed to fetch pending transactions: ${n.status} ${n.statusText}`), [];
-  } catch (n) {
-    return console.error("Error fetching pending transactions:", n), [];
+      return console.error(`Failed to fetch pending transactions: ${e.status} ${e.statusText}`), [];
+  } catch (e) {
+    return console.error("Error fetching pending transactions:", e), [];
   }
 }
-function M(o, e) {
-  return e == null ? (a === "user_node" && d === "user_node" ? e = 50 : e = 500, console.log(`Auto-selected interval: ${e}ms for mempool:${a}, blocks:${d}`)) : console.log(`Using explicit interval: ${e}ms`), y && v(), p = o, g = 0, c = 0, (async () => {
+function M(o, t) {
+  return t == null ? (a === "user_node" && d === "user_node" ? t = 50 : t = 500, console.log(`Auto-selected interval: ${t}ms for mempool:${a}, blocks:${d}`)) : console.log(`Using explicit interval: ${t}ms`), w && v(), y = o, g = 0, c = 0, (async () => {
     if (c === 0)
       try {
-        const t = m("/v2/status");
-        if (!t)
+        const n = m("/v2/status");
+        if (!n)
           throw new Error("No valid block API configuration");
-        const { url: r, headers: s } = t, u = await fetch(r, { headers: s });
+        const { url: r, headers: s } = n, u = await fetch(r, { headers: s });
         if (u.ok)
           c = (await u.json())["last-round"], console.log(`🚀 Starting from current round: ${c}`);
         else
           throw new Error(`Status call failed: ${u.status}`);
-      } catch (t) {
-        console.warn("Could not get starting round, using fallback:", t), c = 51125e3;
+      } catch (n) {
+        console.warn("Could not get starting round, using fallback:", n), c = 51125e3;
       }
-    y = setInterval(async () => {
+    w = setInterval(async () => {
       try {
-        const t = await B();
-        if (!Array.isArray(t)) {
-          console.warn("Expected an array of transactions but got:", t);
+        const n = await B();
+        if (!Array.isArray(n)) {
+          console.warn("Expected an array of transactions but got:", n);
           return;
         }
-        const r = t.length;
+        const r = n.length;
         if (r > g) {
-          const s = r - g, u = t.slice(0, s);
+          const s = r - g, u = n.slice(0, s);
           E(u);
         } else if (r < g) {
           const s = await L(c);
           console.log(`${g - r} transactions from mempool were processed into block nr ${c}, Nodely count of txs: ${s}`);
         }
-        g = r, !w && c > 0 && (w = !0, _(c).then((s) => {
+        g = r, !h && c > 0 && (h = !0, _(c).then((s) => {
           s > c && D(s);
         }).catch((s) => {
-          w = !1;
+          h = !1;
         }).finally(() => {
-          w = !1;
+          h = !1;
         }));
-      } catch (t) {
-        console.error("Error during polling:", t);
+      } catch (n) {
+        console.error("Error during polling:", n);
       }
-    }, e), console.log(`Started polling for transactions and blocks every ${e}ms`);
+    }, t), console.log(`Started polling for transactions and blocks every ${t}ms`);
   })(), !0;
 }
 function v() {
-  y && (clearInterval(y), y = null, w = !1, console.log("Stopped polling for transactions"));
+  w && (clearInterval(w), w = null, h = !1, console.log("Stopped polling for transactions"));
 }
 function E(o) {
-  !p || !Array.isArray(o) || o.length === 0 || o.forEach((e) => {
+  if (!y || !Array.isArray(o) || o.length === 0)
+    return;
+  const t = y;
+  o.forEach((e) => {
     try {
       let n = "pay";
-      e.txn && e.txn.type ? n = e.txn.type : e.tx && e.tx.type ? n = e.tx.type : e.type && (n = e.type), p(n, e);
+      e.txn && e.txn.type ? n = e.txn.type : e.tx && e.tx.type ? n = e.tx.type : e.type && (n = e.type), t(n, e);
     } catch (n) {
-      console.error("Error processing transaction:", n), p("pay", e);
+      console.error("Error processing transaction:", n), t("pay", e);
     }
   });
 }
@@ -155,8 +158,8 @@ async function S() {
   const o = await P();
   if (console.log("Connection test result:", o), o) {
     console.log("Testing pending transactions API...");
-    const e = await B();
-    return console.log("Got transactions:", e), { connected: o, transactionsCount: e.length };
+    const t = await B();
+    return console.log("Got transactions:", t), { connected: o, transactionsCount: t.length };
   }
   return { connected: o, transactionsCount: 0 };
 }
@@ -164,19 +167,19 @@ function j() {
   return c > 0 ? c : null;
 }
 function N(o) {
-  var e, n, t, r, s, u;
+  var t, e, n, r, s, u;
   try {
     console.log("🔍 Starting reward extraction...");
-    const l = o.block || o, A = ((e = l == null ? void 0 : l.cert) == null ? void 0 : e.prop) || (l == null ? void 0 : l.proposer) || ((n = l == null ? void 0 : l.header) == null ? void 0 : n.proposer) || null;
+    const l = o.block || o, A = ((t = l == null ? void 0 : l.cert) == null ? void 0 : t.prop) || (l == null ? void 0 : l.proposer) || ((e = l == null ? void 0 : l.header) == null ? void 0 : e.proposer) || null;
     console.log("🔍 Found proposer:", A);
-    const h = ((t = l == null ? void 0 : l.rewards) == null ? void 0 : t["rewards-level"]) || ((s = (r = l == null ? void 0 : l.header) == null ? void 0 : r.rewards) == null ? void 0 : s["rewards-level"]) || ((u = l == null ? void 0 : l.rwd) == null ? void 0 : u.rl) || 1e7;
-    if (console.log("🔍 Found reward amount:", h), A) {
+    const p = ((n = l == null ? void 0 : l.rewards) == null ? void 0 : n["rewards-level"]) || ((s = (r = l == null ? void 0 : l.header) == null ? void 0 : r.rewards) == null ? void 0 : s["rewards-level"]) || ((u = l == null ? void 0 : l.rwd) == null ? void 0 : u.rl) || 1e7;
+    if (console.log("🔍 Found reward amount:", p), A) {
       const k = {
         txn: {
           type: "reward",
           snd: "ALGORAND-PROTOCOL",
           rcv: A,
-          amt: h,
+          amt: p,
           round: l.rnd || l.round || 0,
           fee: 0
         },
@@ -254,24 +257,24 @@ function m(o) {
   }) : (console.error("Algoranding mode requires user node token for block data"), null) : null;
 }
 async function _(o) {
-  const e = m(`/v2/status/wait-for-block-after/${o}`);
-  if (!e)
+  const t = m(`/v2/status/wait-for-block-after/${o}`);
+  if (!t)
     throw new Error("No valid block API configuration");
-  const { url: n, headers: t } = e, r = await fetch(n, { headers: t });
+  const { url: e, headers: n } = t, r = await fetch(e, { headers: n });
   if (!r.ok)
     throw new Error(`Status API error: ${r.status} ${r.statusText}`);
   return (await r.json())["last-round"];
 }
 async function D(o) {
-  var h, k, T;
-  const e = m(`/v2/blocks/${o}`);
-  if (!e)
+  var p, k, T;
+  const t = m(`/v2/blocks/${o}`);
+  if (!t)
     throw new Error("No valid block API configuration");
-  const { url: n, headers: t } = e, r = await fetch(n, { headers: t });
+  const { url: e, headers: n } = t, r = await fetch(e, { headers: n });
   if (!r.ok)
     throw new Error(`Block API error: ${r.status} ${r.statusText}`);
-  const s = await r.json(), u = s.block.rnd || s.block.round || o, l = ((T = (k = (h = s == null ? void 0 : s.block) == null ? void 0 : h.spt) == null ? void 0 : k[0]) == null ? void 0 : T.n) || null;
-  p && p("block", {
+  const s = await r.json(), u = s.block.rnd || s.block.round || o, l = ((T = (k = (p = s == null ? void 0 : s.block) == null ? void 0 : p.spt) == null ? void 0 : k[0]) == null ? void 0 : T.n) || null;
+  y && y("block", {
     txn: {
       type: "block",
       round: u,
@@ -284,15 +287,15 @@ async function D(o) {
 }
 async function L(o) {
   try {
-    const e = `${i.nodelyBaseUrl}/v2/blocks/${o}`, t = await fetch(e, { headers: {
+    const t = `${i.nodelyBaseUrl}/v2/blocks/${o}`, n = await fetch(t, { headers: {
       Accept: "application/json"
     } });
-    if (!t.ok)
-      return console.warn(`Failed to fetch block ${o} from Nodely: ${t.status}`), 0;
-    const r = await t.json();
+    if (!n.ok)
+      return console.warn(`Failed to fetch block ${o} from Nodely: ${n.status}`), 0;
+    const r = await n.json();
     return r.block && r.block.txns ? r.block.txns.length : 0;
-  } catch (e) {
-    return console.warn(`Error fetching Nodely block data for round ${o}:`, e), 0;
+  } catch (t) {
+    return console.warn(`Error fetching Nodely block data for round ${o}:`, t), 0;
   }
 }
 const G = {
