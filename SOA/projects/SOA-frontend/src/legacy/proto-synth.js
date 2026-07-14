@@ -13,6 +13,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 import * as Tone from 'tone';
 import GossipAPI from '../services/gossip';
+import { initXenakisViz, vizAddTx, vizAddBlock } from './xenakis-viz.js';
 import {
     initAudio,
     initializeToneForInstance,
@@ -69,6 +70,25 @@ async function ensureAsaDatalist() {
         console.warn('Could not load ASA list for name search:', err);
         asaListLoaded = false; // allow a retry on next render
     }
+}
+
+// Old presets stored a separate Pitch offset (same axis as Base Note).
+// Fold it into baseNote once so removed-slider presets sound identical.
+function foldPitchIntoBaseNote(settings) {
+    const pitch = settings?.pitch ?? 0;
+    if (!pitch) return settings;
+    try {
+        const match = String(settings.baseNote).match(/^([A-G]#?)([0-9])$/);
+        if (match) {
+            const idx = chromaticScale.indexOf(match[1]) + parseInt(match[2], 10) * 12 + pitch;
+            const clamped = Math.max(0, Math.min(107, idx));
+            settings.baseNote = `${chromaticScale[clamped % 12]}${Math.floor(clamped / 12)}`;
+        }
+    } catch (err) {
+        console.warn('Could not fold pitch into base note:', err);
+    }
+    settings.pitch = 0;
+    return settings;
 }
 
 // --- Pan / filter display helpers ---
@@ -327,12 +347,6 @@ const createSynthHTML = (synthInstance) => {
             <div class="control-row">
                 <input type="range" id="${uniqueId}-filter-cutoff" min="0" max="100" step="1" value="${cutoffToSlider(settings.filter?.cutoff ?? 20000)}" data-instance-id="${uniqueId}">
             </div>
-        </div>
-
-        <!-- Pitch Section (NEW) -->
-        <div class="pitch-section">
-            <div class="control-row"> <span class="control-label">Pitch: <span id="${uniqueId}-pitch-value">${settings.pitch}</span></span> </div>
-            <div class="control-row"> <input type="range" id="${uniqueId}-pitch" min="-12" max="12" step="1" value="${settings.pitch}" data-instance-id="${uniqueId}"> </div>
         </div>
 
         <!-- Delay Section (was Effect Controls) -->
@@ -663,6 +677,13 @@ const startTransactionStream = async () => {
     } else if (mainType !== 'group') {
         persistentTotalTxs++;
         localStorage.setItem('persistentTotalTxs', persistentTotalTxs.toString());
+    }
+
+    // --- Feed the score ---
+    if (mainType === 'block') {
+        vizAddBlock(txData.round);
+    } else {
+        vizAddTx(mainType, txData);
     }
 
     // --- Update All UI Displays ---
@@ -1098,10 +1119,10 @@ async function loadPresetFromSource(source) {
         // Process Loaded Data
         let targetActiveSynths = presetData.activeSynths.map(loadedInstance => ({
             ...loadedInstance,
-            settings: {
+            settings: foldPitchIntoBaseNote({
                 ...getDefaultInstanceSettings(),
                 ...(loadedInstance.settings || {})
-            },
+            }),
             toneObjects: null
         }));
 
@@ -1404,6 +1425,7 @@ export async function bootLegacySynth() {
   });
 
   initializeEventListeners();
+  initXenakisViz(document.getElementById('xenakis-canvas'));
 
   updateStatus('Ready');
   initializeTypeCounts();
@@ -1819,9 +1841,6 @@ const handleContainerInput = (e) => {
         case 'note-duration': // Changed from 'duration' to match ID
              handleNoteDurationChangeLogic(instanceId, target.value, target);
              break;
-        case 'pitch':
-            handlePitchChangeLogic(instanceId, target.value, target);
-            break;
         case 'pan':
             handlePanChangeLogic(instanceId, target.value);
             break;
@@ -2109,16 +2128,6 @@ const handleNoteDurationChangeLogic = (instanceId, valueStr, inputElement) => {
     const display = document.getElementById(`${instanceId}-note-duration-value`);
     if (display) display.textContent = `${value.toFixed(2)}s`;
     // NoteDuration is used in playTransactionSound, no direct Tone object update here
-};
-
-const handlePitchChangeLogic = (instanceId, valueStr, inputElement) => {
-    const instance = findInstance(instanceId);
-    if (!instance) return;
-    const value = parseInt(valueStr, 10);
-    instance.settings.pitch = value;
-    const display = document.getElementById(`${instanceId}-pitch-value`);
-    if (display) display.textContent = value.toString();
-     // Pitch is used in playTransactionSound, no direct Tone object update here
 };
 
 const handleDelayTimeChangeLogic = (instanceId, valueStr, inputElement) => {
@@ -2564,11 +2573,10 @@ const loadPresetFromLocalStorage = async (presetNameToLoad) => {
                     const newInstance = {
                         id: uniqueId,
                         config: { type: type, subtype: null, parameters: {} }, // Basic config
-                        settings: { // Merge old settings into defaults
+                        settings: foldPitchIntoBaseNote({ // Merge old settings into defaults
                              ...getDefaultInstanceSettings(), // Start with defaults
                              ...oldSettings // Overwrite with saved values
-                             // Ensure nested objects are handled if necessary (defaults cover it)
-                        },
+                        }),
                         toneObjects: null
                     };
                     targetActiveSynths.push(newInstance);
@@ -2691,10 +2699,10 @@ function loadNftPreset(presetData) {
     // Process Loaded Data
     let targetActiveSynths = presetData.activeSynths.map(loadedInstance => ({
       ...loadedInstance,
-      settings: {
-        ...getDefaultInstanceSettings(),
-        ...(loadedInstance.settings || {})
-      },
+      settings: foldPitchIntoBaseNote({
+           ...getDefaultInstanceSettings(),
+           ...(loadedInstance.settings || {})
+      }),
       toneObjects: null
     }));
 
