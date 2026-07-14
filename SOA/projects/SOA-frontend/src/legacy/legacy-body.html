@@ -1,0 +1,105 @@
+    <div class="top-bar">
+        <h1>Algorand TX Sonifier</h1>
+        <div class="controls">
+            <button id="start-btn">Start</button>
+            <button id="stop-btn">Stop</button>
+            <button id="record-btn" disabled>Record</button>
+            <button id="save-preset">Save Preset</button>
+            <button id="load-preset">Load Preset</button>
+            <button id="wallet-connect">Wallet</button>
+        </div>
+    </div>
+
+    <div class="actions-bar">
+        <button id="toggle-aggr-btn" class="toggle-btn" disabled>Aggr Txs</button>
+        <span id="gossip-status" class="api-btn" title="Relay gossip connection">gossip: idle</span>
+        <button id="add-synth">+ Add Synth</button>
+    </div>
+
+    <div class="synth-grid" id="synth-container">
+        <!-- All Synths (including Master) will be dynamically added here -->
+    </div>
+
+    <div class="status-container">
+        <h3>Transaction Stream Status</h3>
+        <div id="status">Ready</div>
+        <div id="transaction-count">0 transactions processed</div>
+        <div id="type-counts-container">
+            <!-- Counts will be dynamically populated here by JS -->
+        </div>
+        <div id="persistent-tx-count" class="persistent-count">Lifetime Txs: 0</div>
+        <div id="persistent-block-count" class="persistent-count">Lifetime Blocks: 0</div>
+    </div>
+
+    <!-- Modal for Loading Presets -->
+    <div id="load-preset-modal" class="legacy-modal">
+        <div class="modal-content">
+            <span class="modal-close" id="load-modal-close">&times;</span>
+
+            <!-- User's Preset NFTs Section -->
+            <h3> Your NFPresets</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 14px; color: #666;">Wallet presets</span>
+                <button id="refresh-nft-presets-btn" style="font-size: 12px; color: #006666; background: none; border: none; cursor: pointer; text-decoration: underline;">Refresh</button>
+            </div>
+            <div id="user-nft-presets-container" style="max-height: 200px; overflow-y: auto; margin-bottom: 16px;">
+                <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">
+                    <p>No NFPresets found in your wallet</p>
+                    <p style="font-size: 12px; margin-top: 4px;">Mint some NFPresets first to see them here</p>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- Legacy Preset Buttons Section -->
+            <h3>Local & Server Presets</h3>
+            <div id="modal-preset-buttons" class="modal-buttons">
+                <!-- Preset buttons will be dynamically added here by the script -->
+            </div>
+
+            <hr>
+
+            <h3>Or Upload File</h3>
+            <input type="file" id="preset-file-input" accept=".json">
+
+            <!-- Error Display -->
+            <div id="load-error-display" style="display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px; padding: 8px; margin-top: 12px;">
+                <p id="load-error-text" style="color: #dc2626; font-size: 12px; margin: 0;"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Saving Presets -->
+    <div id="save-preset-modal" class="legacy-modal">
+        <div class="modal-content">
+            <span class="modal-close" id="save-modal-close">&times;</span>
+            <h2>Save Preset Layout</h2>
+            <input type="text" id="new-preset-name" placeholder="Enter preset name...">
+            <div class="modal-options">
+                <input type="checkbox" id="download-json-toggle" style="vertical-align: middle;">
+                <label for="download-json-toggle">Download as .json file</label>
+            </div>
+            <div class="modal-buttons">
+                <button id="save-new-preset-btn">Save Locally</button>
+            </div>
+
+            <hr style="margin: 12px 0; opacity: 0.4;" />
+
+            <h3>Or Mint NFPreset on-chain</h3>
+            <input type="text" id="nfpreset-nft-name" placeholder="NFP Name (max 32)" maxlength="32" style="width: 100%; margin-bottom: 6px;" />
+            <input type="text" id="nfpreset-unit-name" placeholder="Unit Name (max 8)" maxlength="8" style="width: 100%; margin-bottom: 6px;" />
+            <input type="number" id="nfpreset-supply" placeholder="Supply (default 1)" min="1" max="1000" style="width: 100%; margin-bottom: 6px;" />
+            <input type="text" id="nfpreset-ipfs-token" placeholder="Pinata JWT Token (for IPFS metadata)" style="width: 100%; margin-bottom: 6px;" autocomplete="off" data-form-type="other" />
+            <div style="font-size: 11px; color: #666; margin-bottom: 6px; line-height: 1.3;">
+              Get your free Pinata JWT token at <a href="https://app.pinata.cloud/developers/api-keys" target="_blank" style="color: #006666;">app.pinata.cloud/developers/api-keys</a>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <label for="nfpreset-image-input" style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">NFT Image (optional - will use placeholder if not selected)</label>
+              <input type="file" id="nfpreset-image-input" accept="image/*" style="width: 100%; font-size: 12px;" />
+            </div>
+            <div class="modal-buttons">
+                <button id="mint-nfpreset-btn">Mint NFPreset</button>
+            </div>
+        </div>
+    </div>
+

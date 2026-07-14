@@ -3,6 +3,8 @@
  * Separated from UI logic for better modularity and reusability
  */
 
+import * as Tone from 'tone';
+
 // Tone.js synth setup - Core audio state
 let synthsInitialized = false;
 let masterEQ, masterCompressor, masterLimiter;
@@ -319,7 +321,14 @@ function playTransactionSound(instance, timeOffset = 0) {
 
 
   try {
-    toneObjects.synth.triggerAttackRelease(note, duration, Tone.now() + timeOffset, velocity);
+    // Monophonic synths reject two triggers at the same time; nudge each
+    // trigger to be strictly after the previous one for this instance.
+    let when = Tone.now() + timeOffset;
+    if (toneObjects._lastTriggerTime !== undefined && when <= toneObjects._lastTriggerTime) {
+      when = toneObjects._lastTriggerTime + 0.005;
+    }
+    toneObjects._lastTriggerTime = when;
+    toneObjects.synth.triggerAttackRelease(note, duration, when, velocity);
   } catch (error) {
       console.error(`Tone.js scheduling error for ${id} at offset ${timeOffset.toFixed(3)}s:`, error.message);
   }

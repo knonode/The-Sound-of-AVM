@@ -11,7 +11,8 @@ window.addEventListener('unhandledrejection', (event) => {
     console.error('🚨 Unhandled Promise Rejection:', event.reason);
 });
 
-import AlgorandAPI from './algorand-api.js';
+import * as Tone from 'tone';
+import GossipAPI from '../services/gossip';
 import {
     initAudio,
     initializeToneForInstance,
@@ -39,11 +40,6 @@ let txTypeCounts = {};
 let persistentTotalTxs = 0;
 let persistentTotalBlocks = 0;
 let lastProcessedRound = null;
-let apiMode = 'nodely';
-
-// Replace the old apiMode variable (line 10)
-let currentMempoolMode = 'algoranding'; // Default to algoranding for mempool
-let currentBlockMode = 'nodely'; // Always use nodely for blocks
 
 let activeSynths = [];
 
@@ -92,8 +88,8 @@ const granularityRules = {
   ],
   appl: [
      { subtype: 'appid', field: 'apid', params: ['app-id'], description: 'Application ID'},
-     { subtype: 'foreign-asset', field: 'apat', params: ['asset-id'], description: 'Includes Asset ID' },
-     { subtype: 'foreign-account', field: 'apas', params: ['address'], description: 'Includes Account' }
+     { subtype: 'foreign-asset', field: 'apas', params: ['asset-id'], description: 'Includes Asset ID' },
+     { subtype: 'foreign-account', field: 'apat', params: ['address'], description: 'Includes Account' }
   ],
   acfg: [
     { subtype: 'create', field: 'caid', params: ['manager-address'], description: 'Asset Create (Manager Addr)' },
@@ -113,10 +109,6 @@ const granularityRules = {
   ],
   hb: [
       { subtype: 'heartbeat', field: null, params: [], description: 'Heartbeat' }
-  ],
-  reward: [
-    { subtype: 'proposer', field: 'rcv', params: ['address'], description: 'Block proposer address' },
-    { subtype: 'amount', field: 'amt', params: ['min', 'max'], description: 'Reward amount range' }
   ],
   block: [
     // Remove the subtypes - leave empty array or just one simple option
@@ -523,29 +515,9 @@ const startTransactionStream = async () => {
     }
 
     isPlaying = true;
-    updateStatus('Connecting to Algorand node...');
+    updateStatus('Connecting to relay gossip...');
 
-    const connected = await AlgorandAPI.initAlgodConnection();
-    if (!connected) {
-      console.error("Couldn't connect to Algorand node");
-      updateStatus('Failed to connect to Algorand node');
-      isPlaying = false;
-
-      // Check if we're in user_node mode for better error message
-      const currentModes = AlgorandAPI.getCurrentModes();
-      if (currentModes.mempool === 'user_node' || currentModes.block === 'user_node') {
-        alert('Could not connect to your local node. Remember: Your node connection only works on the same device/network. Try "Algoranding" or "Nodely" for remote access.');
-      } else {
-        alert('Could not connect to the Algorand node.');
-      }
-      return;
-    }
-
-    console.log("Connected to Algorand node - starting transaction polling");
-    updateStatus('Connected - Streaming transactions');
-
-    // Let AlgorandAPI select the proper cadence for the chosen provider
-    AlgorandAPI.startPolling((txType, txData, index) => {
+    const connected = await GossipAPI.start((txType, txData) => {
       if (!isPlaying) return;
 
     // --- Core Matching Logic ---
@@ -678,18 +650,33 @@ const startTransactionStream = async () => {
         });
     }
 
-   });    // Polling interval is chosen automatically
+   }, updateGossipStatus);
+
+    if (!connected) {
+      console.error("Couldn't reach the gossip relay");
+      updateStatus('Failed to connect to the gossip relay');
+      isPlaying = false;
+      GossipAPI.stop();
+      alert('Could not connect to the Algorand gossip relay. Check your network and try again.');
+      return;
+    }
+
+    updateStatus('Connected - streaming live mempool');
 };
+
+// Reflect relay connection state in the actions bar
+function updateGossipStatus(state) {
+    const el = document.getElementById('gossip-status');
+    if (!el) return;
+    el.textContent = `gossip: ${state}`;
+    el.classList.toggle('active', state === 'open');
+}
 
 const stopTransactionStream = () => {
     isPlaying = false;
-    AlgorandAPI.stopPolling();
+    GossipAPI.stop();
+    updateGossipStatus('idle');
     updateStatus('Stream stopped');
-
-    // Stop all state proof countdowns
-    Object.keys(stateProofCountdownIntervals).forEach(instanceId => {
-        stopStateProofCountdown(instanceId);
-    });
 
     // Reset LEDs and indicators
     document.querySelectorAll('.led.active').forEach(led => led.classList.remove('active'));
@@ -725,28 +712,7 @@ function checkTransactionMatch(config, txData) {
         case 'pay-sender':
             // ... existing pay-sender logic using txn ...
             const snd = txn?.snd ?? null;
-            const targetAddress = parameters.address;
-
-            // Enhanced debugging for pay-sender
-            console.log('🔍 PAY-SENDER DEBUG:', {
-                fullTxData: txData,
-                txnObject: txn,
-                senderFromTxn: snd,
-                targetAddress: targetAddress,
-                parametersObject: parameters,
-                configObject: config,
-                exactMatch: snd === targetAddress,
-                senderExists: snd !== null && snd !== undefined,
-                targetExists: targetAddress !== null && targetAddress !== undefined && targetAddress !== '',
-                senderLength: snd?.length,
-                targetLength: targetAddress?.length,
-                senderType: typeof snd,
-                targetType: typeof targetAddress
-            });
-
-            const result = snd === targetAddress;
-            console.log(`PAY-SENDER RESULT: ${result} (${snd} === ${targetAddress})`);
-            return result;
+            return snd === parameters.address;
         case 'pay-receiver':
             // ... existing pay-receiver logic using txn ...
             const rcv = txn?.rcv ?? null;
@@ -796,22 +762,20 @@ function checkTransactionMatch(config, txData) {
 
         // <<< Logic for new appl subtypes >>>
         case 'appl-foreign-asset':
-            const apat = txn?.apat ?? []; // Default to empty array if undefined
+            const apas = txn?.apas ?? []; // foreign assets array
             const searchAssetId = parameters['asset-id'] !== undefined ? Number(parameters['asset-id']) : undefined;
             if (searchAssetId === undefined) {
-                return false; // Or maybe return true if ANY asset is present? For now, require ID.
+                return false;
             }
-            // Check if the searchAssetId exists in the apat array
-            return apat.includes(searchAssetId);
+            return apas.includes(searchAssetId);
 
         case 'appl-foreign-account':
-            const apas = txn?.apas ?? []; // Default to empty array if undefined
+            const apat = txn?.apat ?? []; // accounts array
             const searchAddress = parameters['address'];
             if (!searchAddress) {
-                return false; // Require an address parameter
+                return false;
             }
-            // Check if the searchAddress exists in the apas array
-            return apas.includes(searchAddress);
+            return apat.includes(searchAddress);
 
         case 'keyreg-online':
              // ... existing keyreg-online logic using txn ...
@@ -826,6 +790,29 @@ function checkTransactionMatch(config, txData) {
         case 'afrz-unfreeze':
              // ... existing afrz-unfreeze logic using txn ...
               return (txn?.afrz) === false;
+
+        case 'axfer-opt-out': // Close-out of an asset position
+            return (txn?.aclose ?? null) !== null;
+
+        case 'acfg-create': // Asset creation has no caid
+            return (txn?.caid ?? null) === null;
+        case 'acfg-reconfigure': {
+            const caid = txn?.caid ?? null;
+            if (caid === null) return false;
+            const targetCfgId = parameters['asset-id'] !== undefined ? Number(parameters['asset-id']) : undefined;
+            return targetCfgId === undefined || caid === targetCfgId;
+        }
+        case 'acfg-destroy': {
+            // Destroy = caid present with no new params; from the mempool we
+            // can't always see apar, so match on caid like reconfigure.
+            const caid = txn?.caid ?? null;
+            if (caid === null) return false;
+            const targetDestroyId = parameters['asset-id'] !== undefined ? Number(parameters['asset-id']) : undefined;
+            return targetDestroyId === undefined || caid === targetDestroyId;
+        }
+
+        case 'hb-heartbeat': // Matches any heartbeat tx
+            return true;
 
         case 'stpf-stpf': // Matches any state proof tx
             return true; // Already matched by main type 'stpf'
@@ -1044,7 +1031,7 @@ function savePresetLayout() {
     // === Send compressed preset to parent window for NFT minting ===
     try {
         const compressed = btoa(unescape(encodeURIComponent(jsonString)));
-        window.parent.postMessage({ type: 'PRESET_SAVED', preset: compressed }, '*');
+        window.postMessage({ type: 'PRESET_SAVED', preset: compressed }, '*');
     } catch (err) {
         console.error('Failed to post compressed preset to parent:', err);
     }
@@ -1090,8 +1077,11 @@ window.addEventListener('message', (e) => {
   }
 });
 
-// Initialize the application when the DOM is loaded
-document.addEventListener('DOMContentLoaded', async () => {
+// Boot the synth once its markup is in the DOM (called from React)
+let legacySynthBooted = false;
+export async function bootLegacySynth() {
+  if (legacySynthBooted) return;
+  legacySynthBooted = true;
 
   // --- Get references to all UI elements ---
   const synthContainer = document.getElementById('synth-container');
@@ -1111,16 +1101,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saveNewPresetBtn = document.getElementById('save-new-preset-btn');
   const presetFileInput = document.getElementById('preset-file-input');
   const toggleAggrBtn = document.getElementById('toggle-aggr-btn');
-
-  // New API buttons
-  const algorandingBtn = document.getElementById('algoranding-btn');
-  const nodelyBtn = document.getElementById('nodely-btn');
-  const userNodeBtn = document.getElementById('user-node-btn');
-
-  const apiTokenModal = document.getElementById('api-token-modal');
-  const tokenModalClose = document.getElementById('token-modal-close');
-  const apiTokenInput = document.getElementById('api-token-input');
-  const saveApiTokenBtn = document.getElementById('save-api-token-btn');
 
   // NFT loading elements
   const loadAssetIdInput = document.getElementById('load-asset-id-input');
@@ -1168,7 +1148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           imageFile = imageInput.files[0];
       }
 
-      window.parent.postMessage({
+      window.postMessage({
           type: 'MINT_NFPRESET',
           preset: compressed,
           nftName,
@@ -1314,54 +1294,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Functionality to be added later
   });
 
-  // New API button event listeners
-  algorandingBtn.addEventListener('click', () => {
-    setMempoolMode('algoranding');
-  });
-
-  nodelyBtn.addEventListener('click', () => {
-    setMempoolMode('nodely');
-  });
-
-  userNodeBtn.addEventListener('click', () => {
-    handleUserNodeSelection();
-  });
-
-  // Update token modal listeners
-  tokenModalClose.addEventListener('click', () => {
-      apiTokenModal.style.display = 'none';
-  });
-
-  saveApiTokenBtn.addEventListener('click', () => {
-      const userToken = apiTokenInput.value.trim();
-      if (userToken) {
-          localStorage.setItem('userAlgodToken', userToken);
-
-          // Switch to user node mode for mempool, nodely for blocks
-          currentMempoolMode = 'user_node';
-          currentBlockMode = 'nodely'; // Changed from 'user_node' to 'nodely'
-          AlgorandAPI.setMempoolMode('user_node');
-          AlgorandAPI.setBlockMode('nodely');
-          AlgorandAPI.setApiToken(userToken);
-
-          apiTokenModal.style.display = 'none';
-          updateApiButtonStates();
-          console.log("User API token saved and applied. Using Your Node for mempool, Nodely for blocks.");
-
-          // Restart stream if currently playing
-          if (isPlaying) {
-            stopTransactionStream();
-            setTimeout(() => startTransactionStream(), 1000);
-          }
-      } else {
-          alert("Please enter a valid API token.");
-      }
-  });
-
-  // Initialize API modes and button states
-  initializeApiModes();
-  updateApiButtonStates();
-
   // Initialize state proof countdown
   await initializeStateProofCountdown();
 
@@ -1385,7 +1317,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       loadAssetIdBtn.disabled = true;
 
       // Request preset from React
-      window.parent.postMessage({
+      window.postMessage({
         type: 'REQUEST_NFPRESET_LOAD',
         assetId: assetIdNum
       }, '*');
@@ -1406,7 +1338,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       refreshNftPresetsBtn.disabled = true;
 
       // Request user's preset NFTs from React
-      window.parent.postMessage({
+      window.postMessage({
         type: 'REQUEST_NFPRESET_LIST'
       }, '*');
 
@@ -1423,7 +1355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function handleUserNftPresetClick(assetId) {
     try {
       // Request preset from React
-      window.parent.postMessage({
+      window.postMessage({
         type: 'REQUEST_NFPRESET_LOAD',
         assetId: parseInt(assetId)
       }, '*');
@@ -1583,6 +1515,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.hideLoadError = hideLoadError;
   window.loadNftPreset = loadNftPreset;
 
+  // Wallet button (was an inline script in legacy.html)
+  document.getElementById('wallet-connect')?.addEventListener('click', () => {
+    window.postMessage({ type: 'OPEN_WALLET_MODAL' }, '*');
+  });
+
   // Listen for messages from React
   window.addEventListener('message', (event) => {
     if (event.data.type === 'NFPRESET_LIST') {
@@ -1596,7 +1533,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   });
-});
+}
 
 // <<< initializeEventListeners Uses Event Delegation >>>
 const initializeEventListeners = () => {
@@ -1686,39 +1623,41 @@ const handleContainerInput = (e) => {
         switch(controlIdentifier) {
             case 'volume':
                 const masterVol = parseFloat(target.value);
-                Tone.Destination.volume.rampTo(masterVol, 0.02);
+                updateMasterVolume(masterVol);
                 document.getElementById(`${instanceId}-volume-value`).textContent = `${masterVol.toFixed(1)} dB`;
                 break;
-            case 'comp-thresh':
+            case 'comp-thresh': {
                 const compThresh = parseFloat(target.value);
-                if (masterCompressor) masterCompressor.threshold.value = compThresh;
+                const ratioEl = document.getElementById(`${instanceId}-comp-ratio`);
+                updateMasterCompressor(compThresh, parseFloat(ratioEl?.value ?? '4'));
                 document.getElementById(`${instanceId}-comp-thresh-val`).textContent = `${compThresh.toFixed(0)} dB`;
                 break;
-            case 'comp-ratio':
+            }
+            case 'comp-ratio': {
                 const compRatio = parseFloat(target.value);
-                if (masterCompressor) masterCompressor.ratio.value = compRatio;
+                const threshEl = document.getElementById(`${instanceId}-comp-thresh`);
+                updateMasterCompressor(parseFloat(threshEl?.value ?? '-24'), compRatio);
                 document.getElementById(`${instanceId}-comp-ratio-val`).textContent = `${compRatio.toFixed(0)}:1`;
                 break;
+            }
             case 'eq-low':
-                const eqLow = parseFloat(target.value);
-                if (masterEQ) masterEQ.low.value = eqLow;
-                document.getElementById(`${instanceId}-eq-low-val`).textContent = `${eqLow.toFixed(0)} dB`;
-                break;
             case 'eq-mid':
-                const eqMid = parseFloat(target.value);
-                if (masterEQ) masterEQ.mid.value = eqMid;
-                document.getElementById(`${instanceId}-eq-mid-val`).textContent = `${eqMid.toFixed(0)} dB`;
+            case 'eq-high': {
+                const low = parseFloat(document.getElementById(`${instanceId}-eq-low`)?.value ?? '0');
+                const mid = parseFloat(document.getElementById(`${instanceId}-eq-mid`)?.value ?? '0');
+                const high = parseFloat(document.getElementById(`${instanceId}-eq-high`)?.value ?? '0');
+                updateMasterEQ(low, mid, high);
+                const band = controlIdentifier.split('-')[1];
+                const changed = { low, mid, high }[band];
+                document.getElementById(`${instanceId}-${controlIdentifier}-val`).textContent = `${changed.toFixed(0)} dB`;
                 break;
-            case 'eq-high':
-                const eqHigh = parseFloat(target.value);
-                if (masterEQ) masterEQ.high.value = eqHigh;
-                document.getElementById(`${instanceId}-eq-high-val`).textContent = `${eqHigh.toFixed(0)} dB`;
-                break;
-            case 'limit-thresh':
+            }
+            case 'limit-thresh': {
                 const limitThresh = parseFloat(target.value);
-                if (masterLimiter) masterLimiter.threshold.value = limitThresh;
+                updateMasterLimiter(limitThresh);
                 document.getElementById(`${instanceId}-limit-thresh-val`).textContent = `${limitThresh.toFixed(1)} dB`;
                 break;
+            }
         }
         return; // Stop further processing for master controls
     }
@@ -2543,98 +2482,6 @@ function updateAllSynthMuteButtons() {
 window.startTransactionStream = startTransactionStream;
 window.stopTransactionStream = stopTransactionStream;
 // Add other functions that HTML buttons call
-
-// Add these new functions
-function initializeApiModes() {
-  const storedToken = localStorage.getItem('userAlgodToken');
-
-  if (storedToken) {
-    // User has a token, use user node for both mempool and blocks
-    currentMempoolMode = 'user_node';
-    currentBlockMode = 'user_node';
-    AlgorandAPI.setMempoolMode('user_node');
-    AlgorandAPI.setBlockMode('user_node');
-    AlgorandAPI.setApiToken(storedToken);
-    console.log("Using stored token for Your Node (mempool and blocks)");
-  } else {
-    // No token, use algoranding for mempool, nodely for blocks
-    currentMempoolMode = 'algoranding';
-    currentBlockMode = 'nodely';
-    AlgorandAPI.setMempoolMode('algoranding');
-    AlgorandAPI.setBlockMode('nodely');
-    console.log("Using Algoranding for mempool, Nodely for blocks");
-  }
-}
-
-function setMempoolMode(mode) {
-  if (mode === 'algoranding') {
-    currentMempoolMode = 'algoranding';
-    currentBlockMode = 'nodely';
-    AlgorandAPI.setMempoolMode('algoranding');
-    AlgorandAPI.setBlockMode('nodely');
-    console.log("Using Algoranding for mempool, Nodely for blocks");
-  } else if (mode === 'nodely') {
-    // Nodely is disabled - this shouldn't be called
-    console.warn("Nodely mode is disabled");
-    return;
-  }
-
-  updateApiButtonStates();
-
-  // Restart stream if currently playing
-  if (isPlaying) {
-    stopTransactionStream();
-    setTimeout(() => startTransactionStream(), 1000);
-  }
-}
-
-function handleUserNodeSelection() {
-  const storedToken = localStorage.getItem('userAlgodToken');
-
-  if (storedToken) {
-    // User has a token, switch to user node for mempool, but keep algoranding for blocks
-    currentMempoolMode = 'user_node';
-    currentBlockMode = 'user_node'; // Use user_node for blocks too when token available
-    AlgorandAPI.setMempoolMode('user_node');
-    AlgorandAPI.setBlockMode('user_node');
-    AlgorandAPI.setApiToken(storedToken);
-    updateApiButtonStates();
-    console.log("Using Your Node for mempool and blocks");
-  } else {
-    // No token, show the modal
-    const apiTokenModal = document.getElementById('api-token-modal');
-    if (apiTokenModal) {
-      apiTokenModal.style.display = 'block';
-    }
-  }
-}
-
-function updateApiButtonStates() {
-  const algorandingBtn = document.getElementById('algoranding-btn');
-  const nodelyBtn = document.getElementById('nodely-btn');
-  const userNodeBtn = document.getElementById('user-node-btn');
-
-  if (!algorandingBtn || !nodelyBtn || !userNodeBtn) {
-    console.error("API buttons not found in DOM");
-    return;
-  }
-
-  // Remove active class from all buttons
-  [algorandingBtn, nodelyBtn, userNodeBtn].forEach(btn => {
-    btn.classList.remove('active');
-  });
-
-  // Add active class to current mode
-  if (currentMempoolMode === 'algoranding') {
-    algorandingBtn.classList.add('active');
-  } else if (currentMempoolMode === 'nodely') {
-    nodelyBtn.classList.add('active');
-  } else if (currentMempoolMode === 'user_node') {
-    userNodeBtn.classList.add('active');
-  }
-
-  console.log(`Updated button states: mempool=${currentMempoolMode}, block=${currentBlockMode}`);
-}
 
 // Load NFT preset data directly
 function loadNftPreset(presetData) {
