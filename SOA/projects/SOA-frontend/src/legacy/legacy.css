@@ -203,11 +203,17 @@
             cursor: not-allowed;
         }
 
-        .viz-container h3 { margin-top: 0; }
-        #xenakis-canvas {
+        .viz-bar {
+            margin-top: 10px;
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+        }
+        .viz-canvas {
             display: block;
             width: 100%;
-            height: 340px;
+            /* as tall as a synth card: the viz owns the screen */
+            height: min(85vh, 880px);
             border-radius: 4px;
         }
 

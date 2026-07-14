@@ -32,10 +32,20 @@
         <div id="persistent-block-count" class="persistent-count">Lifetime Blocks: 0</div>
     </div>
 
-    <!-- The Score: live mempool as a Xenakis-style graphic score -->
-    <div class="status-container viz-container">
-        <h3>The Score</h3>
-        <canvas id="xenakis-canvas"></canvas>
+    <!-- Visualizations: one at a time, selected in the bar -->
+    <div class="viz-bar">
+        <button class="api-btn viz-btn active" data-viz="score">The Score</button>
+        <button class="api-btn viz-btn" data-viz="loom">The Loom</button>
+        <button class="api-btn viz-btn" disabled title="coming later">Joy Division</button>
+        <button class="api-btn viz-btn" disabled title="coming later">Tetris</button>
+        <button class="api-btn viz-btn" disabled title="coming later">Drop</button>
+    </div>
+
+    <div class="status-container viz-container" id="viz-score">
+        <canvas id="xenakis-canvas" class="viz-canvas"></canvas>
+    </div>
+    <div class="status-container viz-container" id="viz-loom" style="display: none;">
+        <canvas id="loom-canvas" class="viz-canvas"></canvas>
     </div>
 
     <!-- Modal for Loading Presets -->

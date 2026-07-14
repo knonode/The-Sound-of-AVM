@@ -14,6 +14,7 @@ window.addEventListener('unhandledrejection', (event) => {
 import * as Tone from 'tone';
 import GossipAPI from '../services/gossip';
 import { initXenakisViz, vizAddTx, vizAddBlock } from './xenakis-viz.js';
+import { initLoomViz, loomAddTx, loomAddBlock } from './loom-viz.js';
 import {
     initAudio,
     initializeToneForInstance,
@@ -679,11 +680,13 @@ const startTransactionStream = async () => {
         localStorage.setItem('persistentTotalTxs', persistentTotalTxs.toString());
     }
 
-    // --- Feed the score ---
+    // --- Feed the visualizations (hidden ones sleep; feeding is cheap) ---
     if (mainType === 'block') {
         vizAddBlock(txData.round);
+        loomAddBlock(txData.round);
     } else {
         vizAddTx(mainType, txData);
+        loomAddTx(mainType, txData);
     }
 
     // --- Update All UI Displays ---
@@ -1426,6 +1429,18 @@ export async function bootLegacySynth() {
 
   initializeEventListeners();
   initXenakisViz(document.getElementById('xenakis-canvas'));
+  initLoomViz(document.getElementById('loom-canvas'));
+
+  // Visualization selector bar
+  document.querySelectorAll('.viz-btn[data-viz]').forEach(btn => {
+      btn.addEventListener('click', () => {
+          document.querySelectorAll('.viz-btn[data-viz]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const target = btn.dataset.viz;
+          document.getElementById('viz-score').style.display = target === 'score' ? '' : 'none';
+          document.getElementById('viz-loom').style.display = target === 'loom' ? '' : 'none';
+      });
+  });
 
   updateStatus('Ready');
   initializeTypeCounts();
