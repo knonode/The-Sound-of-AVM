@@ -86,6 +86,13 @@ export function normalizeSignedTxn(raw: unknown, receivedAt: number): Normalized
   const votekey = toB64(t.votekey)
   if (votekey !== undefined) txn.votekey = votekey
 
+  // Heartbeat target account (txn.hb.a) — lets a node runner hear their own node
+  const hb = t.hb as Record<string, unknown> | undefined
+  if (hb && typeof hb === 'object') {
+    const hbad = toAddr(hb.a)
+    if (hbad !== undefined) txn.hbad = hbad
+  }
+
   return { txn, sig: toB64(st.sig), receivedAt }
 }
 

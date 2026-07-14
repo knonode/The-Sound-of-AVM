@@ -47,15 +47,34 @@ let activeSynths = [];
 const chromaticScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const defaultOctave = 4;
 
+// --- Pan / filter display helpers ---
+function formatPan(pan) {
+    const pct = Math.round(pan * 100);
+    if (pct === 0) return 'C';
+    return pct < 0 ? `${-pct}L` : `${pct}R`;
+}
+// Log-scale cutoff slider: 0-100 -> 50 Hz .. 20 kHz
+function sliderToCutoff(v) {
+    return Math.round(50 * Math.pow(400, v / 100));
+}
+function cutoffToSlider(hz) {
+    return Math.round(100 * Math.log(hz / 50) / Math.log(400));
+}
+function formatCutoff(hz) {
+    return hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
+}
+
 function getDefaultInstanceSettings() {
     return {
         oscillator: { type: 'sine' },
         envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.2 },
         volume: -8,
+        pan: 0,
         muted: false,
         savedVolume: null,
         mutedByMaster: false,
         pitch: 0,
+        filter: { cutoff: 20000 },
         delay: { time: 0, feedback: 0, wet: 0 },
         reverb: { roomSize: 0.5, wet: 0.3 },
         lfo: {
@@ -108,7 +127,8 @@ const granularityRules = {
       { subtype: 'stpf', field: null, params: [], description: 'State Proof Transaction' }
   ],
   hb: [
-      { subtype: 'heartbeat', field: null, params: [], description: 'Heartbeat' }
+      { subtype: 'heartbeat', field: null, params: [], description: 'Heartbeat' },
+      { subtype: 'account', field: 'hbad', params: ['address'], description: 'Heartbeat target account' }
   ],
   block: [
     // Remove the subtypes - leave empty array or just one simple option
@@ -201,6 +221,12 @@ const createSynthHTML = (synthInstance) => {
             <div class="control-row">
                 <input type="range" id="${uniqueId}-volume" min="-24" max="3" step="0.5" value="${currentVolume}" data-instance-id="${uniqueId}">
             </div>
+            <div class="control-row">
+                <span class="control-label">Pan: <span id="${uniqueId}-pan-value">${formatPan(settings.pan ?? 0)}</span></span>
+            </div>
+            <div class="control-row">
+                <input type="range" id="${uniqueId}-pan" min="-100" max="100" step="1" value="${Math.round((settings.pan ?? 0) * 100)}" data-instance-id="${uniqueId}">
+            </div>
         </div>
 
         <!-- Base Note Section -->
@@ -260,7 +286,17 @@ const createSynthHTML = (synthInstance) => {
                     <option value="square" ${settings.oscillator.type === 'square' ? 'selected' : ''}>Square</option>
                     <option value="triangle" ${settings.oscillator.type === 'triangle' ? 'selected' : ''}>Triangle</option>
                     <option value="sawtooth" ${settings.oscillator.type === 'sawtooth' ? 'selected' : ''}>Sawtooth</option>
+                    <option value="fatsine" ${settings.oscillator.type === 'fatsine' ? 'selected' : ''}>Fat Sine</option>
+                    <option value="fatsquare" ${settings.oscillator.type === 'fatsquare' ? 'selected' : ''}>Fat Square</option>
+                    <option value="fattriangle" ${settings.oscillator.type === 'fattriangle' ? 'selected' : ''}>Fat Triangle</option>
+                    <option value="fatsawtooth" ${settings.oscillator.type === 'fatsawtooth' ? 'selected' : ''}>Fat Sawtooth</option>
                 </select>
+            </div>
+            <div class="control-row">
+                <span class="control-label">Cutoff: <span id="${uniqueId}-filter-cutoff-value">${formatCutoff(settings.filter?.cutoff ?? 20000)}</span></span>
+            </div>
+            <div class="control-row">
+                <input type="range" id="${uniqueId}-filter-cutoff" min="0" max="100" step="1" value="${cutoffToSlider(settings.filter?.cutoff ?? 20000)}" data-instance-id="${uniqueId}">
             </div>
         </div>
 
@@ -645,7 +681,7 @@ const startTransactionStream = async () => {
             // The mute check happens inside playTransactionSound to silence audio only
             if (instance.toneObjects) {
                  // Use matchIndex for slight time offset if multiple synths match same tx
-                playTransactionSoundWithUI(instance, matchIndex * 0.010);
+                triggerInstanceWithRateLimit(instance, matchIndex * 0.010);
             }
         });
     }
@@ -813,6 +849,8 @@ function checkTransactionMatch(config, txData) {
 
         case 'hb-heartbeat': // Matches any heartbeat tx
             return true;
+        case 'hb-account': // Heartbeat aimed at a specific account
+            return (txn?.hbad ?? null) === parameters.address;
 
         case 'stpf-stpf': // Matches any state proof tx
             return true; // Already matched by main type 'stpf'
@@ -826,7 +864,46 @@ function checkTransactionMatch(config, txData) {
 }
 
 // <<< playTransactionSoundWithUI wraps synthesis module call with UI logic >>>
-const playTransactionSoundWithUI = (instance, timeOffset = 0) => {
+// --- Overflow policy ---
+// Each instance may fire up to AGGR_MAX_PER_WINDOW individual triggers per
+// window. Overflow is dropped in Single mode; in Aggr mode it accumulates
+// and collapses into one heavier hit per flush interval, scaled by count.
+const AGGR_WINDOW_MS = 1000;
+const AGGR_MAX_PER_WINDOW = 10;
+const AGGR_FLUSH_MS = 250;
+let aggregationEnabled = false;
+
+function triggerInstanceWithRateLimit(instance, timeOffset) {
+    const now = Date.now();
+    if (!instance._triggerLog) instance._triggerLog = [];
+    while (instance._triggerLog.length && now - instance._triggerLog[0] >= AGGR_WINDOW_MS) {
+        instance._triggerLog.shift();
+    }
+
+    if (instance._triggerLog.length < AGGR_MAX_PER_WINDOW) {
+        instance._triggerLog.push(now);
+        playTransactionSoundWithUI(instance, timeOffset);
+        return;
+    }
+
+    if (!aggregationEnabled) return; // Single mode: overflow is dropped
+
+    instance._aggrCount = (instance._aggrCount || 0) + 1;
+    if (!instance._aggrTimer) {
+        instance._aggrTimer = setTimeout(() => {
+            const count = instance._aggrCount;
+            instance._aggrCount = 0;
+            instance._aggrTimer = null;
+            if (!count || !instance.toneObjects) return;
+            // One cluster hit: louder and longer the more txs it swallowed
+            const velocity = Math.min(1, 0.6 + count / 40);
+            const durationScale = Math.min(4, 1 + Math.log2(1 + count) / 2);
+            playTransactionSoundWithUI(instance, 0, { velocity, durationScale });
+        }, AGGR_FLUSH_MS);
+    }
+}
+
+const playTransactionSoundWithUI = (instance, timeOffset = 0, opts = {}) => {
   const { id, settings } = instance;
 
   // --- SEQUENCER LOGIC ---
@@ -839,7 +916,7 @@ const playTransactionSoundWithUI = (instance, timeOffset = 0) => {
   // Use synthesis module for audio generation (create a modified instance without UI logic)
   const audioInstance = { ...instance };
   // Remove UI-only properties that aren't needed for synthesis
-  playTransactionSound(audioInstance, timeOffset); // Call imported function
+  playTransactionSound(audioInstance, timeOffset, opts); // Call imported function
 
   // Keep UI logic: Flash LED and Sequencer Indicator (with same offset)
   setTimeout(() => {
@@ -1283,15 +1360,13 @@ export async function bootLegacySynth() {
   injectSliderStyles();
   loadPersistentCounters();
 
-  // <<< Event listeners for new toggle buttons >>>
+  // <<< Aggregation mode toggle: label shows the ACTIVE mode >>>
+  toggleAggrBtn.disabled = false;
+  toggleAggrBtn.textContent = 'Mode: Single';
+  toggleAggrBtn.title = 'Overflow policy above the per-synth rate cap: drop (Single) or collapse into cluster hits (Aggr)';
   toggleAggrBtn.addEventListener('click', () => {
-      const currentState = toggleAggrBtn.textContent;
-      if (currentState === 'Aggr Txs') {
-          toggleAggrBtn.textContent = 'Single Txs';
-      } else {
-          toggleAggrBtn.textContent = 'Aggr Txs';
-      }
-      // Functionality to be added later
+      aggregationEnabled = !aggregationEnabled;
+      toggleAggrBtn.textContent = aggregationEnabled ? 'Mode: Aggr' : 'Mode: Single';
   });
 
   // Initialize state proof countdown
@@ -1683,6 +1758,12 @@ const handleContainerInput = (e) => {
         case 'pitch':
             handlePitchChangeLogic(instanceId, target.value, target);
             break;
+        case 'pan':
+            handlePanChangeLogic(instanceId, target.value);
+            break;
+        case 'filter-cutoff':
+            handleFilterCutoffChangeLogic(instanceId, target.value);
+            break;
         case 'delay-time': // Changed from 'time'
              handleDelayTimeChangeLogic(instanceId, target.value, target);
              break;
@@ -1831,8 +1912,9 @@ const handleWaveformChangeLogic = (instanceId, waveform) => {
     if (!instance) return;
     instance.settings.oscillator.type = waveform;
     console.log(`Instance ${instanceId} waveform changed to: ${waveform}`);
-    // Update Tone object using set
-    instance.toneObjects?.synth?.oscillator?.set({ type: waveform });
+    // PolySynth: push oscillator options to all voices
+    const oscOpts = waveform.startsWith('fat') ? { type: waveform, count: 3, spread: 20 } : { type: waveform };
+    instance.toneObjects?.synth?.set({ oscillator: oscOpts });
 };
 
 const handleSequenceChangeLogic = (instanceId, index, valueStr, inputElement) => {
@@ -1923,6 +2005,27 @@ const handleVolumeChangeLogic = (instanceId, valueStr, inputElement) => {
     if (!instance.settings.muted && instance.toneObjects?.synth?.volume) {
         instance.toneObjects.synth.volume.rampTo(value, 0.02); // Short ramp
     }
+};
+
+const handlePanChangeLogic = (instanceId, valueStr) => {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    const pan = Math.max(-1, Math.min(1, parseInt(valueStr, 10) / 100));
+    instance.settings.pan = pan;
+    const display = document.getElementById(`${instanceId}-pan-value`);
+    if (display) display.textContent = formatPan(pan);
+    instance.toneObjects?.panner?.pan?.rampTo(pan, 0.02);
+};
+
+const handleFilterCutoffChangeLogic = (instanceId, valueStr) => {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    const cutoff = sliderToCutoff(parseInt(valueStr, 10));
+    if (!instance.settings.filter) instance.settings.filter = {};
+    instance.settings.filter.cutoff = cutoff;
+    const display = document.getElementById(`${instanceId}-filter-cutoff-value`);
+    if (display) display.textContent = formatCutoff(cutoff);
+    instance.toneObjects?.filter?.frequency?.rampTo(cutoff, 0.02);
 };
 
 const handleEnvelopeChangeLogic = (instanceId, param, valueStr, inputElement) => {
@@ -2285,6 +2388,9 @@ const handleLfoRateChangeLogic = (instanceId, valueStr, inputElement) => {
     if (display) display.textContent = `${value.toFixed(1)} Hz`;
     // Update Tone object
     instance.toneObjects?.lfo?.set({ frequency: value });
+    if (instance.settings.lfo.destination === 'pitch') {
+        instance.toneObjects?.vibrato?.set({ frequency: value });
+    }
 };
 
 const handleLfoDepthChangeLogic = (instanceId, valueStr, inputElement) => {
@@ -2304,6 +2410,9 @@ const handleLfoWaveformChangeLogic = (instanceId, waveform) => {
     instance.settings.lfo.waveform = waveform;
     // Update Tone object
     instance.toneObjects?.lfo?.set({ type: waveform });
+    if (instance.settings.lfo.destination === 'pitch') {
+        instance.toneObjects?.vibrato?.set({ type: waveform });
+    }
 };
 
 const handleLfoDestinationChangeLogic = (instanceId, destination) => {

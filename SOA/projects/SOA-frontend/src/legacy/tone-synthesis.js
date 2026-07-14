@@ -65,7 +65,7 @@ function connectLFO(instance) {
         return;
     }
 
-    const { lfo, synth, delay } = instance.toneObjects;
+    const { lfo, synth, delay, vibrato } = instance.toneObjects;
     const { destination, depth } = instance.settings.lfo;
     const { baseNote } = instance.settings; // Needed for pitch base freq
     const { volume: baseVolume } = instance.settings; // Needed for volume base level
@@ -77,9 +77,10 @@ function connectLFO(instance) {
     // console.log(`LFO DEBUG (${instance.id}): Attempting to disconnect LFO from previous targets...`); // <<< ADDED LOG
     try {
          // Simply call disconnect - it's safe if not connected
-         lfo.disconnect(synth.oscillator.frequency);
          lfo.disconnect(synth.volume);
          lfo.disconnect(delay.delayTime);
+         // Bypass the vibrato stage; the pitch branch re-enables it
+         vibrato?.set({ wet: 0 });
          //console.log(`LFO DEBUG (${instance.id}): Disconnect successful (or was not connected).`); // <<< MODIFIED LOG
     } catch (e) {
         // Log error IF disconnect itself fails for some reason
@@ -112,13 +113,15 @@ function connectLFO(instance) {
     try {
         switch(destination) {
             case 'pitch':
-                targetParam = synth.oscillator.frequency;
-                targetParamName = 'synth.oscillator.frequency';
-                const baseFreq = Tone.Frequency(baseNote).toFrequency();
-                const ratio = Math.pow(2, scaledModulationAmount / 1200);
-                lfo.min = baseFreq / ratio;
-                lfo.max = baseFreq * ratio;
-                break;
+                // Vibrato stage instead of a direct oscillator connection
+                if (vibrato) {
+                    vibrato.set({
+                        frequency: instance.settings.lfo.rate,
+                        depth: Math.min(1, depth / 100),
+                        wet: 1
+                    });
+                }
+                return; // handled entirely by the vibrato node
             case 'volume':
                 targetParam = synth.volume;
                 targetParamName = 'synth.volume';
@@ -204,6 +207,15 @@ async function initAudio() {
   }
 }
 
+// 'fat' oscillator types get a detuned unison stack
+function buildOscillatorOptions(oscillator) {
+    const type = oscillator?.type ?? 'sine';
+    if (type.startsWith('fat')) {
+        return { type, count: 3, spread: 20 };
+    }
+    return { type };
+}
+
 // Create Tone.js objects for a single synth instance
 async function initializeToneForInstance(instance) {
     // Ensure audio context is started before creating nodes
@@ -236,11 +248,32 @@ async function initializeToneForInstance(instance) {
             wet: settings.reverb.wet
         });
 
-        const synth = new Tone.Synth({
-            oscillator: settings.oscillator,
-            envelope: settings.envelope,
-            volume: settings.muted ? -Infinity : settings.volume
+        // Polyphonic voice: overlapping transactions layer instead of
+        // cutting each other off.
+        const synth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: buildOscillatorOptions(settings.oscillator),
+            envelope: settings.envelope
         });
+        synth.maxPolyphony = 24;
+        synth.volume.value = settings.muted ? -Infinity : settings.volume;
+
+        // Pitch LFO stage (PolySynth has no per-voice frequency param, so
+        // pitch modulation is a Vibrato effect; wet 0 = bypass).
+        const vibrato = new Tone.Vibrato({
+            frequency: settings.lfo.rate,
+            depth: 0,
+            wet: 0
+        });
+
+        // Per-voice lowpass — the subtractive stage
+        const filter = new Tone.Filter({
+            type: 'lowpass',
+            frequency: settings.filter?.cutoff ?? 20000,
+            rolloff: -12,
+            Q: 1
+        });
+
+        const panner = new Tone.Panner(settings.pan ?? 0);
 
         const lfo = new Tone.LFO({
             frequency: settings.lfo.rate,
@@ -250,17 +283,20 @@ async function initializeToneForInstance(instance) {
             amplitude: 0
         }).start();
 
-        // Chain: Synth -> Delay -> Reverb -> Master Bus -> Master Output
-        synth.connect(delay);
+        // Chain: PolySynth -> Vibrato -> Filter -> Delay -> Reverb -> Panner -> Master
+        synth.connect(vibrato);
+        vibrato.connect(filter);
+        filter.connect(delay);
         delay.connect(reverb);
+        reverb.connect(panner);
         if (masterEQ) {
-            reverb.connect(masterEQ);
+            panner.connect(masterEQ);
         } else {
-            reverb.toDestination();
+            panner.toDestination();
         }
 
         // Store references on the instance
-        instance.toneObjects = { synth, delay, reverb, lfo };
+        instance.toneObjects = { synth, vibrato, filter, panner, delay, reverb, lfo };
 
         // Connect LFO based on initial settings
         connectLFO(instance);
@@ -285,6 +321,9 @@ function disposeSynth(instanceId, activeSynths) {
         // Check dispose method exists before calling
         instance.toneObjects.lfo?.dispose();
         instance.toneObjects.synth?.dispose();
+        instance.toneObjects.vibrato?.dispose();
+        instance.toneObjects.filter?.dispose();
+        instance.toneObjects.panner?.dispose();
         instance.toneObjects.delay?.dispose();
         instance.toneObjects.reverb?.dispose();
     } catch (error) {
@@ -294,7 +333,7 @@ function disposeSynth(instanceId, activeSynths) {
 }
 
 // Play a transaction sound using the synthesis engine
-function playTransactionSound(instance, timeOffset = 0) {
+function playTransactionSound(instance, timeOffset = 0, opts = {}) {
   const { id, settings, toneObjects } = instance;
 
   // Check if synth should be muted (either by user or by master)
@@ -315,8 +354,8 @@ function playTransactionSound(instance, timeOffset = 0) {
   const baseNote = settings.baseNote;
   const pitchShift = settings.pitch;
   const note = Tone.Frequency(baseNote).transpose(pitchShift + sequenceOffset);
-  const duration = settings.noteDuration;
-  const velocity = 0.7 + (Math.random() * 0.3); // Random velocity
+  const duration = settings.noteDuration * (opts.durationScale ?? 1);
+  const velocity = opts.velocity ?? (0.7 + (Math.random() * 0.3)); // Random velocity
 
 
 
