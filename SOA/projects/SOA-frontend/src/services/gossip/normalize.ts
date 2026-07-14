@@ -8,6 +8,29 @@ export interface NormalizedTx {
   txn: Record<string, unknown>
   sig?: string
   receivedAt: number
+  /** Full sanitized decode, attached only for rare heavyweight txs (stpf) */
+  raw?: unknown
+}
+
+/**
+ * Deep JSON-friendly conversion of a msgpack decode: BigInt -> string,
+ * Uint8Array -> base64 string, recurse into arrays/objects.
+ */
+export function sanitizeRaw(value: unknown): unknown {
+  if (value === null || value === undefined) return value
+  const t = typeof value
+  if (t === 'bigint') return (value as bigint).toString()
+  if (t === 'number' || t === 'string' || t === 'boolean') return value
+  if (value instanceof Uint8Array) return toB64(value)
+  if (Array.isArray(value)) return value.map(sanitizeRaw)
+  if (t === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = sanitizeRaw(v)
+    }
+    return out
+  }
+  return String(value)
 }
 
 const ADDRESS_FIELDS = ['snd', 'rcv', 'arcv', 'asnd', 'aclose', 'close', 'fadd', 'rekey'] as const

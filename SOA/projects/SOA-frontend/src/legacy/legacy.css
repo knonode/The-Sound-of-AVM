@@ -203,6 +203,32 @@
             cursor: not-allowed;
         }
 
+        .aggr-cap-hint {
+            font-size: 9px;
+            color: #5a9a9a;
+            align-self: center;
+        }
+
+        .stpf-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            pointer-events: none;
+            background: rgba(0, 22, 14, 0.82); /* dark, hint of deep green */
+            overflow: hidden;
+        }
+        .stpf-overlay pre {
+            color: #fff;
+            font-family: 'Berkeley Mono Trial', monospace;
+            font-size: 10px;
+            line-height: 1.25;
+            margin: 0;
+            padding: 0 4vw;
+            white-space: pre-wrap;
+            word-break: break-all;
+            will-change: transform;
+        }
+
         #aggr-cap-input {
             width: 44px;
             background-color: #003333;

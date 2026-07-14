@@ -468,61 +468,81 @@ const createMasterSynthHTML = () => {
 // <<< SIMPLE STATE PROOF TIMER (v2) >>>
 let currentRound = 0; // maintained by block handler elsewhere
 
-const STATE_PROOF_INTERVAL            = 256; // full distance between state-proof blocks
-const STATE_PROOF_COLLECTION_OFFSET   = 135; // rounds between spt.n and first stpf tx
+// Honest tracker: the header's spt[0].n is the round the next state proof
+// covers. We count down to that boundary; past it, the network is gathering
+// signatures for a variable number of rounds ("sigs…") until the proof tx
+// lands and the header jumps to the next cycle.
+let nextStateProofRound = 0; // authoritative spt.n from the block header
 
-// Finite-state machine:  'INIT' → 'COUNTING' → 'AWAIT_TX'
-let spState             = 'INIT';             // current phase
-let nextCollectionStart = 0;                  // authoritative spt.n from header
-let targetRound         = 0;                  // nextCollectionStart + 135
-
-function updateStpfDisplays(count) {
+function updateStpfDisplays() {
+    let text = '…';
+    if (nextStateProofRound > 0 && currentRound > 0) {
+        const remaining = nextStateProofRound - currentRound;
+        text = remaining > 0 ? remaining.toString() : 'sigs…';
+    }
     activeSynths.filter(s => s.config.type === 'stpf').forEach(s => {
         const el = document.getElementById(`${s.id}-stpf-countdown`);
-        if (el) el.textContent = count.toString();
+        if (el) el.textContent = text;
     });
 }
 
 function onNewBlock(blockRound, sptNFromHeader) {
     currentRound = blockRound;
-
-    switch (spState) {
-        case 'INIT': {
-            nextCollectionStart = sptNFromHeader || blockRound; // fallback if header empty
-            while (nextCollectionStart + STATE_PROOF_COLLECTION_OFFSET <= currentRound) {
-                nextCollectionStart += STATE_PROOF_INTERVAL; // we connected mid-cycle
-            }
-            targetRound = nextCollectionStart + STATE_PROOF_COLLECTION_OFFSET;
-            spState     = 'COUNTING';
-            break;
-        }
-        case 'COUNTING': {
-            if (currentRound >= targetRound) {
-                spState = 'AWAIT_TX';
-            }
-            break;
-        }
-        case 'AWAIT_TX': {
-            // header switches to NEXT cycle only after state-proof is included
-            if (sptNFromHeader && sptNFromHeader !== nextCollectionStart) {
-                nextCollectionStart = sptNFromHeader;
-                targetRound         = nextCollectionStart + STATE_PROOF_COLLECTION_OFFSET;
-                spState             = 'COUNTING';
-            } else if (currentRound - targetRound > 50) { // safety auto-reset
-                spState = 'INIT';
-            }
-            break;
-        }
+    if (typeof sptNFromHeader === 'number' && sptNFromHeader > 0) {
+        nextStateProofRound = sptNFromHeader;
     }
-
-    updateStpfDisplays(Math.max(0, targetRound - currentRound));
+    updateStpfDisplays();
 }
 
 function onStpfTransaction() {
-    if (spState === 'COUNTING' && currentRound >= targetRound) {
-        spState = 'AWAIT_TX';
+    // Proof observed in the mempool: flash the displays until the header
+    // confirms the next cycle.
+    activeSynths.filter(s => s.config.type === 'stpf').forEach(s => {
+        const el = document.getElementById(`${s.id}-stpf-countdown`);
+        if (el) el.textContent = '✓ proof';
+    });
+}
+
+// <<< State proof overlay: the whole tx JSON, flowing bottom to top,
+//     too fast to read, transparent, overwhelming. >>>
+let stpfOverlayActive = false;
+function showStateProofOverlay(rawTx) {
+    if (stpfOverlayActive) return; // one proof at a time
+    try {
+        const json = JSON.stringify(rawTx, null, 2);
+        if (!json) return;
+        stpfOverlayActive = true;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'stpf-overlay';
+        const pre = document.createElement('pre');
+        pre.textContent = json;
+        overlay.appendChild(pre);
+        document.body.appendChild(overlay);
+
+        requestAnimationFrame(() => {
+            // Whole body sweeps past in a fixed time regardless of size —
+            // a state proof is megabytes of JSON, so this is very fast.
+            const SWEEP_MS = 15000;
+            const distance = pre.scrollHeight + window.innerHeight;
+            const anim = pre.animate(
+                [
+                    { transform: 'translateY(100vh)' },
+                    { transform: `translateY(-${distance - window.innerHeight}px)` }
+                ],
+                { duration: SWEEP_MS, easing: 'linear' }
+            );
+            const cleanup = () => { overlay.remove(); stpfOverlayActive = false; };
+            anim.onfinish = cleanup;
+            anim.oncancel = cleanup;
+        });
+    } catch (err) {
+        console.warn('State proof overlay failed:', err);
+        stpfOverlayActive = false;
     }
 }
+// Expose for manual testing from the console
+window.showStateProofOverlay = showStateProofOverlay;
 
 // --- Compatibility shims for legacy calls elsewhere in code ---
 function initializeStateProofCountdown() {/* deprecated in v2 */}
@@ -592,8 +612,9 @@ const startTransactionStream = async () => {
     if (mainType === 'stpf') {
         console.log(`📝 Stpf transaction detected in round ${txData.round || currentRound}`);
 
-        // Notify state-proof timer
+        // Notify state-proof timer and rain the full proof down the screen
         onStpfTransaction();
+        showStateProofOverlay(txData.raw ?? txData);
     }
 
     // --- Update current round and state proof data ---
@@ -617,22 +638,7 @@ const startTransactionStream = async () => {
 
 
 
-            // <<< NEW: Debug state proof data from block >>>
-            console.log(`🔍 Block ${txData.round} state proof data:`, {
-                nextStateProofRound: txData.nextStateProofRound,
-                hasNextStateProofRound: txData.nextStateProofRound !== null && txData.nextStateProofRound !== undefined,
-                isInFuture: txData.nextStateProofRound > txData.round,
-                difference: txData.nextStateProofRound - txData.round
-            });
-
-            // <<< NEW: Store the next state proof round from block data >>>
-            if (txData.nextStateProofRound && typeof txData.nextStateProofRound === 'number') {
-                window.nextStateProofRound = txData.nextStateProofRound;
-                console.log(`🔥 Updated nextStateProofRound to: ${window.nextStateProofRound}`);
-            }
-
-            // <<< UPDATED: Update state proof countdowns with actual data >>>
-            updateStateProofCountdowns();
+            // State proof tracking is handled by onNewBlock above.
         }
     }
 

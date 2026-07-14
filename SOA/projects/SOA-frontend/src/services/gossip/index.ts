@@ -4,7 +4,7 @@
 // with its real arrival time — no polling, no count-diffing, no tokens.
 
 import { Tag, decodeTxPayload, encodeMessageOfInterest, splitTag } from './protocol'
-import { normalizeSignedTxn, dedupKey, NormalizedTx } from './normalize'
+import { normalizeSignedTxn, sanitizeRaw, dedupKey, NormalizedTx } from './normalize'
 import { startBlockFollower, BlockSignal } from './blocks'
 
 export const GOSSIP_URL = 'wss://mainnet-gw.4160.nodely.dev/v1/mainnet-v1.0/gossip'
@@ -152,6 +152,8 @@ function connect(onTx: TxCallback, onStatus: StatusCallback) {
         const tx = normalizeSignedTxn(raw, receivedAt)
         if (!tx) continue
         if (isDuplicate(dedupKey(tx))) continue
+        // State proofs carry their full decoded body for the overlay viz
+        if (tx.txn.type === 'stpf') tx.raw = sanitizeRaw(raw)
         onTx(String(tx.txn.type ?? 'pay'), tx)
         if (typeof tx.txn.grp === 'string') bufferGroupMember(tx, onTx)
       }
