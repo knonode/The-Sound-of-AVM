@@ -11,7 +11,6 @@ import ConnectWallet from './components/ConnectWallet'
 import MintSuccessModal from './components/MintSuccessModal'
 import legacyBody from './legacy/legacy-body.html?raw'
 import { bootLegacySynth } from './legacy/proto-synth.js'
-import './legacy/legacy.css'
 
 const Home: React.FC = () => {
   const { activeAccount, activeAddress, wallets, signTransactions } = useWallet()

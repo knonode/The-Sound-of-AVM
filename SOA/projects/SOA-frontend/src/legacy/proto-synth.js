@@ -47,6 +47,30 @@ let activeSynths = [];
 const chromaticScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const defaultOctave = 4;
 
+// --- ASA name search: one shared datalist fed by the Deflex asset list ---
+let asaListLoaded = false;
+async function ensureAsaDatalist() {
+    if (asaListLoaded) return;
+    asaListLoaded = true; // only try once per session
+    try {
+        const res = await fetch('https://deflex.txnlab.dev/api/fetchAssets', {
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!res.ok) throw new Error(`${res.status}`);
+        const assets = await res.json();
+        const datalist = document.getElementById('asa-datalist');
+        if (!datalist || !Array.isArray(assets)) return;
+        datalist.innerHTML = assets
+            .slice(0, 1000)
+            .map(a => `<option value="${a.id}">${(a.name || '?').replace(/</g, '')} (${(a.unit_name || '').replace(/</g, '')})</option>`)
+            .join('');
+        console.log(`ASA datalist loaded: ${Math.min(assets.length, 1000)} assets`);
+    } catch (err) {
+        console.warn('Could not load ASA list for name search:', err);
+        asaListLoaded = false; // allow a retry on next render
+    }
+}
+
 // --- Pan / filter display helpers ---
 function formatPan(pan) {
     const pct = Math.round(pan * 100);
@@ -129,6 +153,11 @@ const granularityRules = {
   hb: [
       { subtype: 'heartbeat', field: null, params: [], description: 'Heartbeat' },
       { subtype: 'account', field: 'hbad', params: ['address'], description: 'Heartbeat target account' }
+  ],
+  group: [
+    { subtype: 'asset', field: 'assets', params: ['asset-id'], description: 'Group touches ASA (e.g. a DEX swap of it)' },
+    { subtype: 'app', field: 'apids', params: ['app-id'], description: 'Group calls App ID' },
+    { subtype: 'size', field: 'size', params: ['min', 'max'], description: 'Group size range' }
   ],
   block: [
     // Remove the subtypes - leave empty array or just one simple option
@@ -346,7 +375,7 @@ const createSynthHTML = (synthInstance) => {
                 <span class="control-label inline-label">Dest.</span>
                 <select id="${uniqueId}-lfo-destination" class="lfo-destination-select compact-select" data-instance-id="${uniqueId}">
                     <option value="none" ${settings.lfo.destination === 'none' ? 'selected' : ''}>None</option>
-                    <option value="pitch" ${settings.lfo.destination === 'pitch' ? 'selected' : ''}>Pitch</option>
+                    <option value="pitch" ${settings.lfo.destination === 'pitch' ? 'selected' : ''}>Vibrato</option>
                     <option value="volume" ${settings.lfo.destination === 'volume' ? 'selected' : ''}>Volume</option>
                     <option value="delayTime" ${settings.lfo.destination === 'delayTime' ? 'selected' : ''}>Delay Time</option>
                 </select>
@@ -613,20 +642,19 @@ const startTransactionStream = async () => {
 
     // --- Update All Counters ---
 
-    // 1. Session-based counters
-    transactionCount++;
+    // 1. Session-based counters ('group' shows in type counts but is not a tx)
+    if (mainType !== 'group') transactionCount++;
     if (txTypeCounts.hasOwnProperty(mainType)) {
         txTypeCounts[mainType]++;
       } else {
         txTypeCounts[mainType] = 1; // Count even if no synth is configured
       }
 
-    // 2. Persistent counters
+    // 2. Persistent counters ('group' is synthetic - members are already counted)
     if (mainType === 'block') {
         persistentTotalBlocks++;
         localStorage.setItem('persistentTotalBlocks', persistentTotalBlocks.toString());
-    } else {
-        // Assume anything that isn't a 'block' event is a transaction
+    } else if (mainType !== 'group') {
         persistentTotalTxs++;
         localStorage.setItem('persistentTotalTxs', persistentTotalTxs.toString());
     }
@@ -852,6 +880,24 @@ function checkTransactionMatch(config, txData) {
         case 'hb-account': // Heartbeat aimed at a specific account
             return (txn?.hbad ?? null) === parameters.address;
 
+        // <<< Atomic groups, emitted once per group by the gossip module >>>
+        case 'group-asset': {
+            const groupAssets = txn?.assets ?? [];
+            const wantedAsset = parameters['asset-id'] !== undefined ? Number(parameters['asset-id']) : undefined;
+            return wantedAsset !== undefined && groupAssets.includes(wantedAsset);
+        }
+        case 'group-app': {
+            const groupApps = txn?.apids ?? [];
+            const wantedApp = parameters['app-id'] !== undefined ? Number(parameters['app-id']) : undefined;
+            return wantedApp !== undefined && groupApps.includes(wantedApp);
+        }
+        case 'group-size': {
+            const size = txn?.size ?? 0;
+            const minSize = parameters.min ?? -Infinity;
+            const maxSize = parameters.max ?? Infinity;
+            return size >= minSize && size <= maxSize;
+        }
+
         case 'stpf-stpf': // Matches any state proof tx
             return true; // Already matched by main type 'stpf'
 
@@ -869,8 +915,8 @@ function checkTransactionMatch(config, txData) {
 // window. Overflow is dropped in Single mode; in Aggr mode it accumulates
 // and collapses into one heavier hit per flush interval, scaled by count.
 const AGGR_WINDOW_MS = 1000;
-const AGGR_MAX_PER_WINDOW = 10;
 const AGGR_FLUSH_MS = 250;
+let aggrMaxPerWindow = 10; // user-settable trigger cap (per synth, per second)
 let aggregationEnabled = false;
 
 function triggerInstanceWithRateLimit(instance, timeOffset) {
@@ -880,7 +926,7 @@ function triggerInstanceWithRateLimit(instance, timeOffset) {
         instance._triggerLog.shift();
     }
 
-    if (instance._triggerLog.length < AGGR_MAX_PER_WINDOW) {
+    if (instance._triggerLog.length < aggrMaxPerWindow) {
         instance._triggerLog.push(now);
         playTransactionSoundWithUI(instance, timeOffset);
         return;
@@ -906,17 +952,15 @@ function triggerInstanceWithRateLimit(instance, timeOffset) {
 const playTransactionSoundWithUI = (instance, timeOffset = 0, opts = {}) => {
   const { id, settings } = instance;
 
-  // --- SEQUENCER LOGIC ---
+  // --- SEQUENCER LOGIC (advanced exactly once, here) ---
   const currentStep = settings.currentStepIndex ?? 0;
   const sequence = settings.sequence || [0, 0, 0, 0, 0, 0, 0, 0];
   const sequenceOffset = sequence[currentStep];
-  // Advance step index for the next play *of this instance*
   instance.settings.currentStepIndex = (currentStep + 1) % 8;
 
   // Use synthesis module for audio generation (create a modified instance without UI logic)
   const audioInstance = { ...instance };
-  // Remove UI-only properties that aren't needed for synthesis
-  playTransactionSound(audioInstance, timeOffset, opts); // Call imported function
+  playTransactionSound(audioInstance, timeOffset, { ...opts, sequenceOffset });
 
   // Keep UI logic: Flash LED and Sequencer Indicator (with same offset)
   setTimeout(() => {
@@ -1368,6 +1412,20 @@ export async function bootLegacySynth() {
       aggregationEnabled = !aggregationEnabled;
       toggleAggrBtn.textContent = aggregationEnabled ? 'Mode: Aggr' : 'Mode: Single';
   });
+
+  // Trigger cap input lives next to the mode button (horizontal, no new row)
+  const aggrCapInput = document.getElementById('aggr-cap-input');
+  if (aggrCapInput) {
+      aggrCapInput.value = aggrMaxPerWindow;
+      aggrCapInput.addEventListener('change', () => {
+          const v = parseInt(aggrCapInput.value, 10);
+          if (Number.isFinite(v) && v >= 1 && v <= 100) {
+              aggrMaxPerWindow = v;
+          } else {
+              aggrCapInput.value = aggrMaxPerWindow;
+          }
+      });
+  }
 
   // Initialize state proof countdown
   await initializeStateProofCountdown();
@@ -2313,7 +2371,14 @@ function renderParameterArea(instanceId, type, subtype) {
                     <label for="${inputId}">${label}:</label>
                     <input type="number" id="${inputId}" name="${param}" class="param-input number-input" data-instance-id="${instanceId}" data-param-type="${param}" value="${currentValue}">
                 </div>`;
-        } else { // address, asset-id, app-id, manager-address etc.
+        } else if (param === 'asset-id') { // searchable: type a name, pick the ID
+             ensureAsaDatalist();
+             paramHTML += `
+                <div class="param-control">
+                    <label for="${inputId}">${label}:</label>
+                    <input type="text" id="${inputId}" name="${param}" class="param-input text-input" list="asa-datalist" placeholder="ID or name..." data-instance-id="${instanceId}" data-param-type="${param}" value="${currentValue}">
+                </div>`;
+        } else { // address, app-id, manager-address etc.
              paramHTML += `
                 <div class="param-control">
                     <label for="${inputId}">${label}:</label>

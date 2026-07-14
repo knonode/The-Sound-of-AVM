@@ -344,11 +344,18 @@ function playTransactionSound(instance, timeOffset = 0, opts = {}) {
   }
 
   // --- SEQUENCER LOGIC ---
-  const currentStep = settings.currentStepIndex ?? 0;
-  const sequence = settings.sequence || [0, 0, 0, 0, 0, 0, 0, 0];
-  const sequenceOffset = sequence[currentStep];
-  // Advance step index for the next play *of this instance*
-  instance.settings.currentStepIndex = (currentStep + 1) % 8;
+  // The UI wrapper advances the step and passes the offset; only run our
+  // own sequencer when called standalone (otherwise the step advances twice
+  // and every other step is skipped).
+  let sequenceOffset;
+  if (opts.sequenceOffset !== undefined) {
+    sequenceOffset = opts.sequenceOffset;
+  } else {
+    const currentStep = settings.currentStepIndex ?? 0;
+    const sequence = settings.sequence || [0, 0, 0, 0, 0, 0, 0, 0];
+    sequenceOffset = sequence[currentStep];
+    instance.settings.currentStepIndex = (currentStep + 1) % 8;
+  }
 
   // --- Note Calculation ---
   const baseNote = settings.baseNote;

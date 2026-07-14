@@ -9,7 +9,28 @@ import { startBlockFollower, BlockSignal } from './blocks'
 
 export const GOSSIP_URL = 'wss://mainnet-gw.4160.nodely.dev/v1/mainnet-v1.0/gossip'
 
-export type TxCallback = (txType: string, txData: NormalizedTx | BlockSignal) => void
+/**
+ * One event per atomic group: members buffered briefly after the first
+ * arrives, then flushed with the union of the resources they touch.
+ * A DEX swap of ASA X always shows X in `assets`.
+ */
+export interface GroupSignal {
+  txn: {
+    type: 'group'
+    grp: string
+    size: number
+    /** union of xaid + apas + faid + caid across members */
+    assets: number[]
+    /** union of apid + apfa across members */
+    apids: number[]
+    /** distinct member types, e.g. ['appl','axfer'] */
+    types: string[]
+  }
+  members: NormalizedTx[]
+  receivedAt: number
+}
+
+export type TxCallback = (txType: string, txData: NormalizedTx | BlockSignal | GroupSignal) => void
 export type StatusCallback = (state: 'connecting' | 'open' | 'closed' | 'error', detail?: string) => void
 
 let ws: WebSocket | null = null
@@ -30,6 +51,65 @@ function isDuplicate(key: string): boolean {
     seenCurrent = new Set()
   }
   return false
+}
+
+// --- Atomic group buffering ---
+const GROUP_FLUSH_MS = 300
+const MAX_GROUP_SIZE = 16
+const groupBuffers = new Map<string, { members: NormalizedTx[]; timer: ReturnType<typeof setTimeout> }>()
+
+function flushGroup(grp: string, onTx: TxCallback) {
+  const buf = groupBuffers.get(grp)
+  if (!buf) return
+  groupBuffers.delete(grp)
+
+  const assets = new Set<number>()
+  const apids = new Set<number>()
+  const types = new Set<string>()
+  let receivedAt = Infinity
+  for (const m of buf.members) {
+    const t = m.txn
+    types.add(String(t.type))
+    receivedAt = Math.min(receivedAt, m.receivedAt)
+    for (const f of ['xaid', 'faid', 'caid'] as const) {
+      if (typeof t[f] === 'number') assets.add(t[f] as number)
+    }
+    if (Array.isArray(t.apas)) for (const a of t.apas as number[]) assets.add(a)
+    if (typeof t.apid === 'number') apids.add(t.apid)
+    if (Array.isArray(t.apfa)) for (const a of t.apfa as number[]) apids.add(a)
+  }
+
+  onTx('group', {
+    txn: {
+      type: 'group',
+      grp,
+      size: buf.members.length,
+      assets: [...assets],
+      apids: [...apids],
+      types: [...types],
+    },
+    members: buf.members,
+    receivedAt: receivedAt === Infinity ? Date.now() : receivedAt,
+  })
+}
+
+function bufferGroupMember(tx: NormalizedTx, onTx: TxCallback) {
+  const grp = tx.txn.grp as string
+  let buf = groupBuffers.get(grp)
+  if (!buf) {
+    buf = { members: [], timer: setTimeout(() => flushGroup(grp, onTx), GROUP_FLUSH_MS) }
+    groupBuffers.set(grp, buf)
+  }
+  buf.members.push(tx)
+  if (buf.members.length >= MAX_GROUP_SIZE) {
+    clearTimeout(buf.timer)
+    flushGroup(grp, onTx)
+  }
+}
+
+function clearGroupBuffers() {
+  for (const buf of groupBuffers.values()) clearTimeout(buf.timer)
+  groupBuffers.clear()
 }
 
 function connect(onTx: TxCallback, onStatus: StatusCallback) {
@@ -73,6 +153,7 @@ function connect(onTx: TxCallback, onStatus: StatusCallback) {
         if (!tx) continue
         if (isDuplicate(dedupKey(tx))) continue
         onTx(String(tx.txn.type ?? 'pay'), tx)
+        if (typeof tx.txn.grp === 'string') bufferGroupMember(tx, onTx)
       }
     }
 
@@ -133,6 +214,7 @@ export function stop(): void {
   running = false
   stopBlocks?.()
   stopBlocks = null
+  clearGroupBuffers()
   ws?.close()
   ws = null
 }

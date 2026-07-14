@@ -90,6 +90,7 @@
         .mini-synth.synth-afrz { background-color: rgba(38, 53, 189, 0.514); }
         .mini-synth.synth-stpf { background-color: rgba(14, 61, 59, 0.493); }
         .mini-synth.synth-hb { background-color: rgba(233, 87, 87, 0.589); }
+        .mini-synth.synth-group { background-color: rgba(212, 160, 23, 0.45); }
         /* Add more rules if other main types exist */
 
         .synth-header {
@@ -200,6 +201,17 @@
         .toggle-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        #aggr-cap-input {
+            width: 44px;
+            background-color: #003333;
+            color: #00cccc;
+            border: 1px solid #006666;
+            border-radius: 4px;
+            font-size: 11px;
+            padding: 3px 4px;
+            text-align: center;
         }
 
         /* Specific styling for base note controls row */
