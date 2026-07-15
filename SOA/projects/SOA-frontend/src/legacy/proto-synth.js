@@ -1316,7 +1316,7 @@ export async function bootLegacySynth() {
       container.innerHTML = ''; // Clear previous buttons
 
       // Add buttons for server presets
-      ['presets/max-pain.json', 'presets/vanilla.json', 'presets/block-anxiety.json'].forEach(name => {
+      ['presets/max-pain.json', 'presets/vanilla.json', 'presets/block-anxiety.json', 'presets/fable-the-magnificent.json'].forEach(name => {
         const button = document.createElement('button');
         button.textContent = name.replace(/^presets\//, '').replace('.json', '');
         button.dataset.fileName = name;
