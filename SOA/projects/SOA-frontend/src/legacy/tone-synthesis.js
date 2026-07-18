@@ -282,7 +282,7 @@ async function initializeToneForInstance(instance) {
                 release: Math.max(0.03, env.release ?? 0.03)
             }
         });
-        synth.maxPolyphony = 24;
+        synth.maxPolyphony = 12;
         synth.volume.value = settings.muted ? -Infinity : settings.volume;
 
         // Pitch LFO stage (PolySynth has no per-voice frequency param, so
