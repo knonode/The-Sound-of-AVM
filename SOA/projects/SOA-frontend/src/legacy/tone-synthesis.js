@@ -8,6 +8,7 @@ import * as Tone from 'tone';
 // Tone.js synth setup - Core audio state
 let synthsInitialized = false;
 let masterEQ, masterCompressor, masterLimiter;
+let masterSplit, masterMeterL, masterMeterR;
 let isMasterMuted = false;
 let masterVolumeBeforeMute = -3.0;
 
@@ -193,6 +194,14 @@ async function initAudio() {
       masterCompressor.connect(masterLimiter);
       masterLimiter.toDestination(); // Final connection to speakers
 
+      // Read-only stereo tap for the master ladder meters
+      masterSplit = new Tone.Split();
+      masterMeterL = new Tone.Meter({ smoothing: 0.8 });
+      masterMeterR = new Tone.Meter({ smoothing: 0.8 });
+      masterLimiter.connect(masterSplit);
+      masterSplit.connect(masterMeterL, 0, 0);
+      masterSplit.connect(masterMeterR, 1, 0);
+
       // Set initial master volume
       if (Tone.Destination.volume) {
           Tone.Destination.volume.value = -3.0;
@@ -275,6 +284,10 @@ async function initializeToneForInstance(instance) {
 
         const panner = new Tone.Panner(settings.pan ?? 0);
 
+        // Read-only level tap for this voice's ladder meter
+        const meter = new Tone.Meter({ smoothing: 0.8 });
+        panner.connect(meter);
+
         const lfo = new Tone.LFO({
             frequency: settings.lfo.rate,
             type: settings.lfo.waveform,
@@ -296,7 +309,7 @@ async function initializeToneForInstance(instance) {
         }
 
         // Store references on the instance
-        instance.toneObjects = { synth, vibrato, filter, panner, delay, reverb, lfo };
+        instance.toneObjects = { synth, vibrato, filter, panner, delay, reverb, lfo, meter };
 
         // Connect LFO based on initial settings
         connectLFO(instance);
@@ -326,6 +339,7 @@ function disposeSynth(instanceId, activeSynths) {
         instance.toneObjects.panner?.dispose();
         instance.toneObjects.delay?.dispose();
         instance.toneObjects.reverb?.dispose();
+        instance.toneObjects.meter?.dispose();
     } catch (error) {
         console.error(`Error disposing Tone.js objects for ${instanceId}:`, error);
     }
@@ -472,6 +486,14 @@ function updateMasterCompressor(threshold, ratio) {
     }
 }
 
+// Current master output level per channel, in dB (read-only taps)
+function getMasterMeterValues() {
+    return [
+        masterMeterL ? masterMeterL.getValue() : -Infinity,
+        masterMeterR ? masterMeterR.getValue() : -Infinity,
+    ];
+}
+
 // Update master limiter
 function updateMasterLimiter(threshold) {
     if (masterLimiter) {
@@ -493,6 +515,7 @@ export {
     updateMasterEQ,
     updateMasterCompressor,
     updateMasterLimiter,
+    getMasterMeterValues,
     scaleLfoDepth,
     unlockIOSAudioOnce
 };

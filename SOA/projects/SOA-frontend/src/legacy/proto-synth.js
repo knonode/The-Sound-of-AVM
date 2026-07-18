@@ -28,6 +28,7 @@ import {
     updateMasterEQ,
     updateMasterCompressor,
     updateMasterLimiter,
+    getMasterMeterValues,
     scaleLfoDepth,
     synthsInitialized,
     isMasterMuted,
@@ -90,6 +91,71 @@ function foldPitchIntoBaseNote(settings) {
     }
     settings.pitch = 0;
     return settings;
+}
+
+// --- LED ladder meters (read-only diagnosis + eye candy) ---
+const METER_SEGS = 12;
+function meterLadderHTML(id) {
+    let segs = '';
+    for (let i = 0; i < METER_SEGS; i++) {
+        const cls = i >= 11 ? 'seg top' : i >= 9 ? 'seg warn' : 'seg';
+        segs += `<div class="${cls}"></div>`;
+    }
+    return `<div class="level-meter" id="${id}">${segs}</div>`;
+}
+
+const meterClipHold = {};
+function updateLadder(id, db) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const v = typeof db === 'number' && isFinite(db) ? db : -100;
+    const lit = Math.max(0, Math.min(METER_SEGS, Math.round(((v + 48) / 48) * METER_SEGS)));
+    const now = performance.now();
+    if (v > -1) meterClipHold[id] = now + 600; // hold the red for visibility
+    const clipping = (meterClipHold[id] || 0) > now;
+    const kids = el.children;
+    for (let i = 0; i < METER_SEGS; i++) {
+        kids[i].classList.toggle('lit', i < lit);
+        if (i === METER_SEGS - 1) kids[i].classList.toggle('clip', clipping);
+    }
+}
+
+function startMeterLoop() {
+    let frame = 0;
+    const tick = () => {
+        requestAnimationFrame(tick);
+        if (document.hidden || (++frame & 1)) return; // ~30fps is plenty
+        for (const inst of activeSynths) {
+            const m = inst.toneObjects?.meter;
+            if (m) updateLadder(`${inst.id}-meter`, m.getValue());
+        }
+        const [l, r] = getMasterMeterValues();
+        updateLadder('master-meter-l', l);
+        updateLadder('master-meter-r', r);
+    };
+    requestAnimationFrame(tick);
+}
+
+// Temporary diagnostic: count main-thread stalls (>50ms long tasks).
+// Late note scheduling from stalls = scratches and dropouts.
+function startStallCounter() {
+    const el = document.getElementById('stall-counter');
+    if (!el || typeof PerformanceObserver === 'undefined') return;
+    let count = 0;
+    let worst = 0;
+    try {
+        const obs = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                count++;
+                worst = Math.max(worst, Math.round(entry.duration));
+            }
+            el.textContent = `stalls: ${count} (worst ${worst}ms)`;
+            el.classList.toggle('bad', worst > 150);
+        });
+        obs.observe({ entryTypes: ['longtask'] });
+    } catch (err) {
+        el.textContent = 'stalls: n/a';
+    }
 }
 
 // --- Pan / filter display helpers ---
@@ -401,6 +467,7 @@ const createSynthHTML = (synthInstance) => {
     // Combine parts
     const htmlString = `
         <div class="mini-synth ${typeClass}" data-instance-id="${uniqueId}">
+            ${meterLadderHTML(`${uniqueId}-meter`)}
             ${headerHTML}
             ${parameterAreaHTML}
             ${controlsHTML}
@@ -465,6 +532,7 @@ const createMasterSynthHTML = () => {
 
     const fullHTML = `
         <div class="mini-synth master-synth" data-instance-id="${uniqueId}">
+            <div class="master-meter">${meterLadderHTML('master-meter-l')}${meterLadderHTML('master-meter-r')}</div>
             ${headerHTML}
             ${parameterAreaHTML}
             ${controlsHTML}
@@ -1428,6 +1496,8 @@ export async function bootLegacySynth() {
   });
 
   initializeEventListeners();
+  startMeterLoop();
+  startStallCounter();
   initXenakisViz(document.getElementById('xenakis-canvas'));
   initLoomViz(document.getElementById('loom-canvas'));
 

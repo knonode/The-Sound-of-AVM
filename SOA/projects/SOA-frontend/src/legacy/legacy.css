@@ -71,9 +71,10 @@
         }
 
         .mini-synth {
+            position: relative; /* anchor for the LED ladder meter */
             background-color: rgba(0, 77, 77, 0.5);
             border-radius: 4px;
-            padding: 5px;
+            padding: 5px 5px 5px 11px; /* left room for the meter */
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             margin-bottom: 7px;
             display: flex; /* Allow sections to grow */
@@ -216,6 +217,53 @@
             height: min(85vh, 880px);
             border-radius: 4px;
         }
+
+        /* LED ladder meters */
+        .level-meter {
+            position: absolute;
+            left: 2px;
+            top: 6px;
+            bottom: 6px;
+            width: 5px;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 1px;
+        }
+        .level-meter .seg {
+            flex: 1;
+            background: rgba(0, 70, 55, 0.4);
+            border-radius: 1px;
+        }
+        .level-meter .seg.lit { background: #00cc66; }
+        .level-meter .seg.warn.lit { background: #cfd23a; }
+        .level-meter .seg.top.lit { background: #e0763a; }
+        .level-meter .seg.clip {
+            background: #ff3030 !important;
+            box-shadow: 0 0 4px #ff3030;
+        }
+        .master-synth { padding-left: 17px; }
+        .master-meter {
+            position: absolute;
+            left: 2px;
+            top: 6px;
+            bottom: 6px;
+            width: 11px;
+            display: flex;
+            gap: 1px;
+        }
+        .master-meter .level-meter {
+            position: static;
+            flex: 1;
+            width: auto;
+        }
+
+        #stall-counter {
+            margin-right: auto; /* pin to the left of the actions bar */
+            font-size: 10px;
+            color: #5a9a9a;
+            align-self: center;
+        }
+        #stall-counter.bad { color: #ff7a66; }
 
         .aggr-cap-hint {
             font-size: 9px;
