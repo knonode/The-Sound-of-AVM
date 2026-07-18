@@ -5,6 +5,14 @@
 
 import * as Tone from 'tone';
 
+// A ~40ms output buffer: a glitch only happens when the renderer misses a
+// delivery deadline, and a deeper buffer makes every deadline forgiving —
+// absorbing both our per-note construction spikes and OS preemption blips.
+// Costs constant tx-arrival -> sound latency, which a mempool sonifier
+// doesn't feel; spacing BETWEEN txs is unaffected. Must run before any
+// node is created so the whole graph lands on this context.
+Tone.setContext(new Tone.Context({ latencyHint: 0.04 }));
+
 // Tone.js synth setup - Core audio state
 let synthsInitialized = false;
 let masterEQ, masterCompressor, masterLimiter;
