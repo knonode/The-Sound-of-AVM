@@ -259,9 +259,17 @@ async function initializeToneForInstance(instance) {
 
         // Polyphonic voice: overlapping transactions layer instead of
         // cutting each other off.
+        // Envelope floor: an attack/release at (or near) zero is a waveform
+        // discontinuity — audible as a click at any volume. 5ms/30ms ramps
+        // are below the threshold of sounding "softer" but remove the click.
+        const env = settings.envelope || {};
         const synth = new Tone.PolySynth(Tone.Synth, {
             oscillator: buildOscillatorOptions(settings.oscillator),
-            envelope: settings.envelope
+            envelope: {
+                ...env,
+                attack: Math.max(0.005, env.attack ?? 0.005),
+                release: Math.max(0.03, env.release ?? 0.03)
+            }
         });
         synth.maxPolyphony = 24;
         synth.volume.value = settings.muted ? -Infinity : settings.volume;
