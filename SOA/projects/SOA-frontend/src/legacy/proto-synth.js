@@ -458,8 +458,8 @@ const createMasterSynthHTML = () => {
         <!-- Limiter Section -->
         <div class="limiter-section">
             <span class="control-label">Limiter</span>
-            <div class="control-row"><span class="control-label">Threshold: <span id="${uniqueId}-limit-thresh-val">-3.0 dB</span></span></div>
-            <div class="control-row"><input type="range" id="${uniqueId}-limit-thresh" min="-6" max="-2" step="0.1" value="-3" data-instance-id="${uniqueId}"></div>
+            <div class="control-row"><span class="control-label">Threshold: <span id="${uniqueId}-limit-thresh-val">-2.0 dB</span></span></div>
+            <div class="control-row"><input type="range" id="${uniqueId}-limit-thresh" min="-6" max="-2" step="0.1" value="-2" data-instance-id="${uniqueId}"></div>
         </div>
     `;
 

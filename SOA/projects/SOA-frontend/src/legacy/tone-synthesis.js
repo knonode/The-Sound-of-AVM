@@ -8,7 +8,6 @@ import * as Tone from 'tone';
 // Tone.js synth setup - Core audio state
 let synthsInitialized = false;
 let masterEQ, masterCompressor, masterLimiter;
-let masterBusPad, masterSoftClip;
 let isMasterMuted = false;
 let masterVolumeBeforeMute = -3.0;
 
@@ -181,32 +180,18 @@ async function initAudio() {
 
 
   try {
-    // A sonifier doesn't need low latency: ask for the big playback buffer
-    // so dense polyphony never starves the audio thread (underrun crackle).
-    if (Tone.context.latencyHint !== 'playback') {
-        Tone.setContext(new Tone.Context({ latencyHint: 'playback' }));
-    }
     await unlockIOSAudioOnce();   // ensure iOS is unlocked before Tone.start()
     await Tone.start();
 
-      // <<< Master FX Chain with real headroom >>>
-      // All synths sum into a -6 dB pad first: a dozen polyphonic voices at
-      // -8 dB each add up far past 0 dBFS, and WebAudio dynamics nodes have
-      // no lookahead, so transients overshoot straight into hard clipping.
-      masterBusPad = new Tone.Gain(0.5);
+      // <<< NEW: Initialize Master FX Chain >>>
       masterEQ = new Tone.EQ3({ low: 0, mid: 0, high: 0 });
       masterCompressor = new Tone.Compressor({ threshold: -24, ratio: 4 });
-      masterLimiter = new Tone.Limiter(-3);
-      // Final safety: tanh soft-clip turns any residual overshoot into
-      // gentle saturation instead of digital squarewave edges.
-      masterSoftClip = new Tone.WaveShaper((x) => Math.tanh(1.5 * x), 1024);
+      masterLimiter = new Tone.Limiter(-2);
 
-      // Pad -> EQ -> Compressor -> Limiter -> SoftClip -> speakers
-      masterBusPad.connect(masterEQ);
+      // Connect the master chain: EQ -> Compressor -> Limiter -> Final Output
       masterEQ.connect(masterCompressor);
       masterCompressor.connect(masterLimiter);
-      masterLimiter.connect(masterSoftClip);
-      masterSoftClip.toDestination();
+      masterLimiter.toDestination(); // Final connection to speakers
 
       // Set initial master volume
       if (Tone.Destination.volume) {
@@ -269,7 +254,7 @@ async function initializeToneForInstance(instance) {
             oscillator: buildOscillatorOptions(settings.oscillator),
             envelope: settings.envelope
         });
-        synth.maxPolyphony = 16;
+        synth.maxPolyphony = 24;
         synth.volume.value = settings.muted ? -Infinity : settings.volume;
 
         // Pitch LFO stage (PolySynth has no per-voice frequency param, so
@@ -304,8 +289,8 @@ async function initializeToneForInstance(instance) {
         filter.connect(delay);
         delay.connect(reverb);
         reverb.connect(panner);
-        if (masterBusPad) {
-            panner.connect(masterBusPad);
+        if (masterEQ) {
+            panner.connect(masterEQ);
         } else {
             panner.toDestination();
         }
