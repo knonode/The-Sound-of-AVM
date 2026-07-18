@@ -571,7 +571,7 @@
 
         /* Add this to your existing CSS */
         .synth-block {
-            border-left: 4px solid #00FF00; /* Green for new blocks */
+            /* border-left removed: the ladder meter owns the left edge now */
             background: linear-gradient(135deg, rgba(0, 255, 0, 0.1) 0%, rgba(0, 255, 0, 0.05) 100%);
         }
 

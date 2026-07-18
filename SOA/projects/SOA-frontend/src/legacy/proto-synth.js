@@ -31,6 +31,7 @@ import {
     getMasterMeterValues,
     scaleLfoDepth,
     rewireFxChain,
+    updateSharedReverbRoomSize,
     synthsInitialized,
     isMasterMuted,
     masterVolumeBeforeMute,
@@ -2261,11 +2262,7 @@ const handleReverbDecayChangeLogic = (instanceId, valueStr, inputElement) => {
     instance.settings.reverb.roomSize = roomSize;
     const display = document.getElementById(`${instanceId}-reverb-size-value`);
     if (display) display.textContent = roomSize.toFixed(2);
-    if (instance.toneObjects?.reverb?.roomSize?.rampTo) {
-        instance.toneObjects.reverb.roomSize.rampTo(roomSize, 0.02);
-    } else if (instance.toneObjects?.reverb) {
-        instance.toneObjects.reverb.roomSize = roomSize;
-    }
+    updateSharedReverbRoomSize(roomSize); // room is global (shared bus)
 };
 
 const handleReverbSizeChangeLogic = (instanceId, valueStr, inputElement) => {
@@ -2275,11 +2272,7 @@ const handleReverbSizeChangeLogic = (instanceId, valueStr, inputElement) => {
     instance.settings.reverb.roomSize = value;
     const display = document.getElementById(`${instanceId}-reverb-size-value`);
     if (display) display.textContent = value.toFixed(2);
-    if (instance.toneObjects?.reverb?.roomSize?.rampTo) {
-        instance.toneObjects.reverb.roomSize.rampTo(value, 0.02);
-    } else if (instance.toneObjects?.reverb) {
-        instance.toneObjects.reverb.roomSize = value;
-    }
+    updateSharedReverbRoomSize(value); // room is global (shared bus)
 };
 
 const handleReverbWetChangeLogic = (instanceId, valueStr, inputElement) => {
@@ -2289,8 +2282,8 @@ const handleReverbWetChangeLogic = (instanceId, valueStr, inputElement) => {
     instance.settings.reverb.wet = value;
     const display = document.getElementById(`${instanceId}-reverb-wet-value`);
     if (display) display.textContent = value.toFixed(2);
-    // Update Tone object
-    instance.toneObjects?.reverb?.wet?.rampTo(value, 0.02);
+    // Wet = send amount into the shared reverb bus
+    instance.toneObjects?.reverbSend?.gain?.rampTo(value, 0.02);
     if (instance.toneObjects) rewireFxChain(instance.toneObjects, instance.settings);
 };
 

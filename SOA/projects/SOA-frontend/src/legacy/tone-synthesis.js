@@ -8,6 +8,10 @@ import * as Tone from 'tone';
 // Tone.js synth setup - Core audio state
 let synthsInitialized = false;
 let masterEQ, masterCompressor, masterLimiter;
+// One reverb engine for the whole app: per-synth Freeverbs saturated the
+// audio thread (~8% each, rendering even in silence). Synth reverb-wet
+// knobs are send amounts into this bus; room size is global.
+let sharedReverb = null;
 let masterSplit, masterMeterL, masterMeterR;
 let isMasterMuted = false;
 let masterVolumeBeforeMute = -3.0;
@@ -194,6 +198,11 @@ async function initAudio() {
       masterCompressor.connect(masterLimiter);
       masterLimiter.toDestination(); // Final connection to speakers
 
+      // Shared reverb bus (wet 1 = pure effect; the dry path goes straight
+      // to masterEQ, so this only ever carries the reverb tail)
+      sharedReverb = new Tone.Freeverb({ roomSize: 0.7, wet: 1 });
+      sharedReverb.connect(masterEQ);
+
       // Read-only stereo tap for the master ladder meters
       masterSplit = new Tone.Split();
       masterMeterL = new Tone.Meter({ smoothing: 0.8 });
@@ -248,14 +257,16 @@ async function initializeToneForInstance(instance) {
             feedback: settings.delay.feedback,
             wet: settings.delay.wet
         });
-        // Use Freeverb for realtime-adjustable room size
-        const desiredRoomSize = (typeof settings.reverb?.roomSize === 'number')
-            ? settings.reverb.roomSize
-            : Math.max(0.05, Math.min(0.95, ((settings.reverb?.decay ?? 1.5) / 10)));
-        const reverb = new Tone.Freeverb({
-            roomSize: desiredRoomSize,
-            wet: settings.reverb.wet
-        });
+        // Send into the shared reverb bus; gain = the synth's reverb wet.
+        // Room size is global — a preset's roomSize values apply last-wins.
+        const reverbSend = new Tone.Gain(settings.reverb?.wet ?? 0);
+        if (sharedReverb) {
+            reverbSend.connect(sharedReverb);
+            const desiredRoomSize = (typeof settings.reverb?.roomSize === 'number')
+                ? settings.reverb.roomSize
+                : Math.max(0.05, Math.min(0.95, ((settings.reverb?.decay ?? 1.5) / 10)));
+            sharedReverb.roomSize.value = desiredRoomSize;
+        }
 
         // Polyphonic voice: overlapping transactions layer instead of
         // cutting each other off.
@@ -304,8 +315,9 @@ async function initializeToneForInstance(instance) {
             amplitude: 0
         }).start();
 
-        // Chain: PolySynth -> Vibrato -> Filter -> [Delay] -> [Reverb] -> Panner -> Master
-        // Delay/reverb only join the chain while their wet > 0 (see rewireFxChain).
+        // Chain: PolySynth -> Vibrato -> Filter -> [Delay] -> Panner -> Master
+        //                                          Panner -> [send] -> shared reverb bus
+        // Delay/send only join the graph while their wet > 0 (see rewireFxChain).
         synth.connect(vibrato);
         vibrato.connect(filter);
         if (masterEQ) {
@@ -315,7 +327,7 @@ async function initializeToneForInstance(instance) {
         }
 
         // Store references on the instance
-        instance.toneObjects = { synth, vibrato, filter, panner, delay, reverb, lfo, meter };
+        instance.toneObjects = { synth, vibrato, filter, panner, delay, reverbSend, lfo, meter };
         rewireFxChain(instance.toneObjects, settings);
 
         // Connect LFO based on initial settings
@@ -327,26 +339,41 @@ async function initializeToneForInstance(instance) {
     }
 }
 
-// Wire filter -> [delay] -> [reverb] -> panner, skipping any effect whose
-// wet is 0. A connected effect renders every quantum even in silence, so
-// bypass must mean disconnection — an unreachable node costs nothing.
-// No-ops unless the on/off state actually changed (avoids mid-signal
-// disconnect glitches on ordinary wet-slider moves).
+// Wire filter -> [delay] -> panner, plus a post-pan send into the shared
+// reverb bus when reverb wet > 0. A connected effect renders every quantum
+// even in silence, so bypass must mean disconnection — an unreachable node
+// costs nothing. No-ops unless the on/off state actually changed (avoids
+// mid-signal disconnect glitches on ordinary wet-slider moves).
 function rewireFxChain(toneObjects, settings) {
-    const { filter, delay, reverb, panner } = toneObjects || {};
-    if (!filter || !delay || !reverb || !panner) return;
+    const { filter, delay, panner, reverbSend } = toneObjects || {};
+    if (!filter || !delay || !panner || !reverbSend) return;
     const delayOn = (settings.delay?.wet ?? 0) > 0;
     const reverbOn = (settings.reverb?.wet ?? 0) > 0;
     const prev = toneObjects._fxWiring;
     if (prev && prev.delayOn === delayOn && prev.reverbOn === reverbOn) return;
-    filter.disconnect();
-    delay.disconnect();
-    reverb.disconnect();
-    let head = filter;
-    if (delayOn) { head.connect(delay); head = delay; }
-    if (reverbOn) { head.connect(reverb); head = reverb; }
-    head.connect(panner);
+    if (!prev || prev.delayOn !== delayOn) {
+        filter.disconnect();
+        delay.disconnect();
+        let head = filter;
+        if (delayOn) { head.connect(delay); head = delay; }
+        head.connect(panner);
+    }
+    if (reverbOn && !prev?.reverbOn) panner.connect(reverbSend);
+    if (!reverbOn && prev?.reverbOn) {
+        try { panner.disconnect(reverbSend); } catch { /* edge already gone */ }
+    }
     toneObjects._fxWiring = { delayOn, reverbOn };
+}
+
+// Room size is a property of the shared bus — any synth's slider moves it
+function updateSharedReverbRoomSize(value) {
+    if (!sharedReverb) return;
+    const size = Math.max(0, Math.min(1, value));
+    if (sharedReverb.roomSize.rampTo) {
+        sharedReverb.roomSize.rampTo(size, 0.02);
+    } else {
+        sharedReverb.roomSize.value = size;
+    }
 }
 
 // Dispose of Tone.js objects for a synth instance
@@ -367,7 +394,7 @@ function disposeSynth(instanceId, activeSynths) {
         instance.toneObjects.filter?.dispose();
         instance.toneObjects.panner?.dispose();
         instance.toneObjects.delay?.dispose();
-        instance.toneObjects.reverb?.dispose();
+        instance.toneObjects.reverbSend?.dispose();
         instance.toneObjects.meter?.dispose();
     } catch (error) {
         console.error(`Error disposing Tone.js objects for ${instanceId}:`, error);
@@ -547,6 +574,7 @@ export {
     getMasterMeterValues,
     scaleLfoDepth,
     rewireFxChain,
+    updateSharedReverbRoomSize,
     unlockIOSAudioOnce
 };
 
