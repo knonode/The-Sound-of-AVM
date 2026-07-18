@@ -2,190 +2,516 @@
     "activeSynths": [
         {
             "id": "fable-block-deep",
-            "config": { "type": "block", "subtype": null, "parameters": { "label": "the deep" } },
+            "config": {
+                "type": "block",
+                "subtype": null,
+                "parameters": {
+                    "label": "the deep"
+                }
+            },
             "settings": {
-                "oscillator": { "type": "fatsine" },
-                "envelope": { "attack": 0.05, "decay": 0.35, "sustain": 0.5, "release": 1.6 },
+                "oscillator": {
+                    "type": "fatsine"
+                },
+                "envelope": {
+                    "attack": 0.05,
+                    "decay": 0.35,
+                    "sustain": 0.5,
+                    "release": 1.6
+                },
                 "volume": -10,
                 "pan": 0,
                 "muted": false,
                 "savedVolume": null,
                 "mutedByMaster": false,
-                "filter": { "cutoff": 420 },
-                "delay": { "time": 0, "feedback": 0, "wet": 0 },
-                "reverb": { "roomSize": 0.8, "wet": 0.55 },
-                "lfo": { "rate": 0.3, "depth": 0, "waveform": "sine", "destination": "none" },
+                "filter": {
+                    "cutoff": 420
+                },
+                "delay": {
+                    "time": 0,
+                    "feedback": 0,
+                    "wet": 0
+                },
+                "reverb": {
+                    "roomSize": 0.8,
+                    "wet": 0.55
+                },
+                "lfo": {
+                    "rate": 0.3,
+                    "depth": 0,
+                    "waveform": "sine",
+                    "destination": "none"
+                },
                 "noteDuration": 0.42,
                 "baseNote": "D1",
-                "sequence": [0, 0, 7, 0, 0, 5, 0, -2],
+                "sequence": [
+                    0,
+                    0,
+                    7,
+                    0,
+                    0,
+                    5,
+                    0,
+                    -2
+                ],
                 "currentStepIndex": 0
             }
         },
         {
             "id": "fable-block-shimmer",
-            "config": { "type": "block", "subtype": null, "parameters": { "label": "the shimmer" } },
+            "config": {
+                "type": "block",
+                "subtype": null,
+                "parameters": {
+                    "label": "the shimmer"
+                }
+            },
             "settings": {
-                "oscillator": { "type": "fattriangle" },
-                "envelope": { "attack": 0.01, "decay": 0.25, "sustain": 0.15, "release": 0.9 },
+                "oscillator": {
+                    "type": "fattriangle"
+                },
+                "envelope": {
+                    "attack": 0.01,
+                    "decay": 0.25,
+                    "sustain": 0.15,
+                    "release": 0.9
+                },
                 "volume": -16,
                 "pan": 0.4,
                 "muted": false,
                 "savedVolume": null,
                 "mutedByMaster": false,
-                "filter": { "cutoff": 6200 },
-                "delay": { "time": 0.47, "feedback": 0.55, "wet": 0.5 },
-                "reverb": { "roomSize": 0.6, "wet": 0.35 },
-                "lfo": { "rate": 5, "depth": 0, "waveform": "sine", "destination": "none" },
+                "filter": {
+                    "cutoff": 6200
+                },
+                "delay": {
+                    "time": 0.47,
+                    "feedback": 0.55,
+                    "wet": 0.5
+                },
+                "reverb": {
+                    "roomSize": 0.6,
+                    "wet": 0.35
+                },
+                "lfo": {
+                    "rate": 5,
+                    "depth": 0,
+                    "waveform": "sine",
+                    "destination": "none"
+                },
                 "noteDuration": 0.15,
                 "baseNote": "A4",
-                "sequence": [12, 7, 3, 0, -2, 3, 7, 10],
+                "sequence": [
+                    12,
+                    7,
+                    3,
+                    0,
+                    -2,
+                    3,
+                    7,
+                    10
+                ],
                 "currentStepIndex": 0
             }
         },
         {
             "id": "fable-pay-wanderers",
-            "config": { "type": "pay", "subtype": null, "parameters": { "label": "wanderers" } },
+            "config": {
+                "type": "pay",
+                "subtype": null,
+                "parameters": {
+                    "label": "wanderers"
+                }
+            },
             "settings": {
-                "oscillator": { "type": "triangle" },
-                "envelope": { "attack": 0.02, "decay": 0.3, "sustain": 0.25, "release": 0.5 },
+                "oscillator": {
+                    "type": "triangle"
+                },
+                "envelope": {
+                    "attack": 0.02,
+                    "decay": 0.3,
+                    "sustain": 0.25,
+                    "release": 0.5
+                },
                 "volume": -12,
                 "pan": -0.25,
                 "muted": false,
                 "savedVolume": null,
                 "mutedByMaster": false,
-                "filter": { "cutoff": 1600 },
-                "delay": { "time": 0.28, "feedback": 0.25, "wet": 0.2 },
-                "reverb": { "roomSize": 0.5, "wet": 0.4 },
-                "lfo": { "rate": 5, "depth": 0, "waveform": "sine", "destination": "none" },
+                "filter": {
+                    "cutoff": 1600
+                },
+                "delay": {
+                    "time": 0.28,
+                    "feedback": 0.25,
+                    "wet": 0.2
+                },
+                "reverb": {
+                    "roomSize": 0.5,
+                    "wet": 0.4
+                },
+                "lfo": {
+                    "rate": 5,
+                    "depth": 0,
+                    "waveform": "sine",
+                    "destination": "none"
+                },
                 "noteDuration": 0.14,
                 "baseNote": "F3",
-                "sequence": [0, 3, 7, 10, 7, 3, 0, -5],
+                "sequence": [
+                    0,
+                    3,
+                    7,
+                    10,
+                    7,
+                    3,
+                    0,
+                    -5
+                ],
                 "currentStepIndex": 0
             }
         },
         {
             "id": "fable-pay-leviathan",
-            "config": { "type": "pay", "subtype": "amount", "parameters": { "label": "leviathan >5kA", "min": 5000, "max": null } },
+            "config": {
+                "type": "pay",
+                "subtype": "amount",
+                "parameters": {
+                    "label": "leviathan >5kA",
+                    "min": 5000,
+                    "max": null
+                }
+            },
             "settings": {
-                "oscillator": { "type": "fatsquare" },
-                "envelope": { "attack": 0.04, "decay": 0.4, "sustain": 0.6, "release": 1.8 },
-                "volume": -6,
+                "oscillator": {
+                    "type": "fatsquare"
+                },
+                "envelope": {
+                    "attack": 0.04,
+                    "decay": 0.4,
+                    "sustain": 0.6,
+                    "release": 1.8
+                },
+                "volume": -13,
                 "pan": 0,
                 "muted": false,
                 "savedVolume": null,
                 "mutedByMaster": false,
-                "filter": { "cutoff": 300 },
-                "delay": { "time": 0, "feedback": 0, "wet": 0 },
-                "reverb": { "roomSize": 0.92, "wet": 0.7 },
-                "lfo": { "rate": 0.4, "depth": 18, "waveform": "sine", "destination": "volume" },
+                "filter": {
+                    "cutoff": 300
+                },
+                "delay": {
+                    "time": 0,
+                    "feedback": 0,
+                    "wet": 0
+                },
+                "reverb": {
+                    "roomSize": 0.92,
+                    "wet": 0.7
+                },
+                "lfo": {
+                    "rate": 0.4,
+                    "depth": 18,
+                    "waveform": "sine",
+                    "destination": "volume"
+                },
                 "noteDuration": 0.5,
                 "baseNote": "D2",
-                "sequence": [0, 0, 0, 0, 0, 0, 0, 0],
+                "sequence": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
                 "currentStepIndex": 0
             }
         },
         {
             "id": "fable-axfer-market",
-            "config": { "type": "axfer", "subtype": null, "parameters": { "label": "the market" } },
+            "config": {
+                "type": "axfer",
+                "subtype": null,
+                "parameters": {
+                    "label": "the market"
+                }
+            },
             "settings": {
-                "oscillator": { "type": "sawtooth" },
-                "envelope": { "attack": 0.005, "decay": 0.12, "sustain": 0.1, "release": 0.18 },
+                "oscillator": {
+                    "type": "sawtooth"
+                },
+                "envelope": {
+                    "attack": 0.005,
+                    "decay": 0.12,
+                    "sustain": 0.1,
+                    "release": 0.18
+                },
                 "volume": -14,
                 "pan": -0.55,
                 "muted": false,
                 "savedVolume": null,
                 "mutedByMaster": false,
-                "filter": { "cutoff": 900 },
-                "delay": { "time": 0.19, "feedback": 0.3, "wet": 0.35 },
-                "reverb": { "roomSize": 0.35, "wet": 0.2 },
-                "lfo": { "rate": 5, "depth": 0, "waveform": "sine", "destination": "none" },
+                "filter": {
+                    "cutoff": 900
+                },
+                "delay": {
+                    "time": 0.19,
+                    "feedback": 0.3,
+                    "wet": 0.35
+                },
+                "reverb": {
+                    "roomSize": 0.35,
+                    "wet": 0.2
+                },
+                "lfo": {
+                    "rate": 5,
+                    "depth": 0,
+                    "waveform": "sine",
+                    "destination": "none"
+                },
                 "noteDuration": 0.09,
                 "baseNote": "A3",
-                "sequence": [0, 2, 3, 5, 7, 5, 3, 2],
+                "sequence": [
+                    0,
+                    2,
+                    3,
+                    5,
+                    7,
+                    5,
+                    3,
+                    2
+                ],
                 "currentStepIndex": 0
             }
         },
         {
             "id": "fable-appl-hush",
-            "config": { "type": "appl", "subtype": null, "parameters": { "label": "machinery hush" } },
+            "config": {
+                "type": "appl",
+                "subtype": null,
+                "parameters": {
+                    "label": "machinery hush"
+                }
+            },
             "settings": {
-                "oscillator": { "type": "sine" },
-                "envelope": { "attack": 0.001, "decay": 0.05, "sustain": 0.05, "release": 0.06 },
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.001,
+                    "decay": 0.05,
+                    "sustain": 0.05,
+                    "release": 0.06
+                },
                 "volume": -20,
                 "pan": 0.55,
                 "muted": false,
                 "savedVolume": null,
                 "mutedByMaster": false,
-                "filter": { "cutoff": 3200 },
-                "delay": { "time": 0, "feedback": 0, "wet": 0 },
-                "reverb": { "roomSize": 0.4, "wet": 0.3 },
-                "lfo": { "rate": 5, "depth": 0, "waveform": "sine", "destination": "none" },
+                "filter": {
+                    "cutoff": 3200
+                },
+                "delay": {
+                    "time": 0,
+                    "feedback": 0,
+                    "wet": 0
+                },
+                "reverb": {
+                    "roomSize": 0.4,
+                    "wet": 0.3
+                },
+                "lfo": {
+                    "rate": 5,
+                    "depth": 0,
+                    "waveform": "sine",
+                    "destination": "none"
+                },
                 "noteDuration": 0.03,
                 "baseNote": "D5",
-                "sequence": [0, 0, 12, 0, 0, 7, 0, 0],
+                "sequence": [
+                    0,
+                    0,
+                    12,
+                    0,
+                    0,
+                    7,
+                    0,
+                    0
+                ],
                 "currentStepIndex": 0
             }
         },
         {
             "id": "fable-group-goldenweft",
-            "config": { "type": "group", "subtype": null, "parameters": { "label": "golden weft" } },
+            "config": {
+                "type": "group",
+                "subtype": null,
+                "parameters": {
+                    "label": "golden weft"
+                }
+            },
             "settings": {
-                "oscillator": { "type": "fatsawtooth" },
-                "envelope": { "attack": 0.02, "decay": 0.3, "sustain": 0.4, "release": 0.6 },
+                "oscillator": {
+                    "type": "fatsawtooth"
+                },
+                "envelope": {
+                    "attack": 0.02,
+                    "decay": 0.3,
+                    "sustain": 0.4,
+                    "release": 0.6
+                },
                 "volume": -9,
                 "pan": 0.2,
                 "muted": false,
                 "savedVolume": null,
                 "mutedByMaster": false,
-                "filter": { "cutoff": 1250 },
-                "delay": { "time": 0.33, "feedback": 0.45, "wet": 0.3 },
-                "reverb": { "roomSize": 0.55, "wet": 0.35 },
-                "lfo": { "rate": 4.5, "depth": 25, "waveform": "sine", "destination": "pitch" },
+                "filter": {
+                    "cutoff": 1250
+                },
+                "delay": {
+                    "time": 0.33,
+                    "feedback": 0.45,
+                    "wet": 0.3
+                },
+                "reverb": {
+                    "roomSize": 0.55,
+                    "wet": 0.35
+                },
+                "lfo": {
+                    "rate": 4.5,
+                    "depth": 25,
+                    "waveform": "sine",
+                    "destination": "pitch"
+                },
                 "noteDuration": 0.22,
                 "baseNote": "D3",
-                "sequence": [0, 7, 12, 7, 0, -5, 7, 14],
+                "sequence": [
+                    0,
+                    7,
+                    12,
+                    7,
+                    0,
+                    -5,
+                    7,
+                    14
+                ],
                 "currentStepIndex": 0
             }
         },
         {
-            "id": "fable-hb-smalldrum",
-            "config": { "type": "hb", "subtype": null, "parameters": { "label": "small drum" } },
+            "id": "fable-hb-arrhythmia",
+            "config": {
+                "type": "hb",
+                "subtype": null,
+                "parameters": {
+                    "label": "arrhythmia"
+                }
+            },
             "settings": {
-                "oscillator": { "type": "sine" },
-                "envelope": { "attack": 0.001, "decay": 0.1, "sustain": 0, "release": 0.12 },
-                "volume": -11,
+                "oscillator": {
+                    "type": "fattriangle"
+                },
+                "envelope": {
+                    "attack": 0.15,
+                    "decay": 0.4,
+                    "sustain": 0.5,
+                    "release": 1.8
+                },
+                "volume": -12,
                 "pan": -0.1,
                 "muted": false,
                 "savedVolume": null,
                 "mutedByMaster": false,
-                "filter": { "cutoff": 260 },
-                "delay": { "time": 0, "feedback": 0, "wet": 0 },
-                "reverb": { "roomSize": 0.3, "wet": 0.25 },
-                "lfo": { "rate": 5, "depth": 0, "waveform": "sine", "destination": "none" },
-                "noteDuration": 0.08,
-                "baseNote": "G1",
-                "sequence": [0, 0, 0, 0, 0, 0, 0, 0],
+                "filter": {
+                    "cutoff": 700
+                },
+                "delay": {
+                    "time": 0.42,
+                    "feedback": 0.35,
+                    "wet": 0.3
+                },
+                "reverb": {
+                    "roomSize": 0.4,
+                    "wet": 0.3
+                },
+                "lfo": {
+                    "rate": 7.5,
+                    "depth": 22,
+                    "waveform": "sine",
+                    "destination": "pitch"
+                },
+                "noteDuration": 2.5,
+                "baseNote": "A2",
+                "sequence": [
+                    0,
+                    1,
+                    0,
+                    -1,
+                    3,
+                    0,
+                    1,
+                    -2
+                ],
                 "currentStepIndex": 0
             }
         },
         {
             "id": "fable-stpf-archive",
-            "config": { "type": "stpf", "subtype": "stpf", "parameters": { "label": "the archive" } },
+            "config": {
+                "type": "stpf",
+                "subtype": "stpf",
+                "parameters": {
+                    "label": "the archive"
+                }
+            },
             "settings": {
-                "oscillator": { "type": "fatsine" },
-                "envelope": { "attack": 0.8, "decay": 0.5, "sustain": 0.7, "release": 2 },
-                "volume": -4,
+                "oscillator": {
+                    "type": "fatsawtooth"
+                },
+                "envelope": {
+                    "attack": 2.5,
+                    "decay": 1.0,
+                    "sustain": 0.8,
+                    "release": 7
+                },
+                "volume": -9,
                 "pan": 0,
                 "muted": false,
                 "savedVolume": null,
                 "mutedByMaster": false,
-                "filter": { "cutoff": 520 },
-                "delay": { "time": 0, "feedback": 0, "wet": 0 },
-                "reverb": { "roomSize": 0.95, "wet": 0.8 },
-                "lfo": { "rate": 0.2, "depth": 30, "waveform": "sine", "destination": "volume" },
-                "noteDuration": 0.5,
-                "baseNote": "D2",
-                "sequence": [0, 0, 0, 0, 0, 0, 0, 0],
+                "filter": {
+                    "cutoff": 380
+                },
+                "delay": {
+                    "time": 0,
+                    "feedback": 0,
+                    "wet": 0
+                },
+                "reverb": {
+                    "roomSize": 0.95,
+                    "wet": 0.85
+                },
+                "lfo": {
+                    "rate": 0.15,
+                    "depth": 24,
+                    "waveform": "sine",
+                    "destination": "volume"
+                },
+                "noteDuration": 6,
+                "baseNote": "D1",
+                "sequence": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
                 "currentStepIndex": 0
             }
         }
