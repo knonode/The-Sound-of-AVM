@@ -304,12 +304,10 @@ async function initializeToneForInstance(instance) {
             amplitude: 0
         }).start();
 
-        // Chain: PolySynth -> Vibrato -> Filter -> Delay -> Reverb -> Panner -> Master
+        // Chain: PolySynth -> Vibrato -> Filter -> [Delay] -> [Reverb] -> Panner -> Master
+        // Delay/reverb only join the chain while their wet > 0 (see rewireFxChain).
         synth.connect(vibrato);
         vibrato.connect(filter);
-        filter.connect(delay);
-        delay.connect(reverb);
-        reverb.connect(panner);
         if (masterEQ) {
             panner.connect(masterEQ);
         } else {
@@ -318,6 +316,7 @@ async function initializeToneForInstance(instance) {
 
         // Store references on the instance
         instance.toneObjects = { synth, vibrato, filter, panner, delay, reverb, lfo, meter };
+        rewireFxChain(instance.toneObjects, settings);
 
         // Connect LFO based on initial settings
         connectLFO(instance);
@@ -326,6 +325,28 @@ async function initializeToneForInstance(instance) {
         console.error(`Failed to initialize Tone.js objects for instance ${instance.id}:`, error);
         instance.toneObjects = null;
     }
+}
+
+// Wire filter -> [delay] -> [reverb] -> panner, skipping any effect whose
+// wet is 0. A connected effect renders every quantum even in silence, so
+// bypass must mean disconnection — an unreachable node costs nothing.
+// No-ops unless the on/off state actually changed (avoids mid-signal
+// disconnect glitches on ordinary wet-slider moves).
+function rewireFxChain(toneObjects, settings) {
+    const { filter, delay, reverb, panner } = toneObjects || {};
+    if (!filter || !delay || !reverb || !panner) return;
+    const delayOn = (settings.delay?.wet ?? 0) > 0;
+    const reverbOn = (settings.reverb?.wet ?? 0) > 0;
+    const prev = toneObjects._fxWiring;
+    if (prev && prev.delayOn === delayOn && prev.reverbOn === reverbOn) return;
+    filter.disconnect();
+    delay.disconnect();
+    reverb.disconnect();
+    let head = filter;
+    if (delayOn) { head.connect(delay); head = delay; }
+    if (reverbOn) { head.connect(reverb); head = reverb; }
+    head.connect(panner);
+    toneObjects._fxWiring = { delayOn, reverbOn };
 }
 
 // Dispose of Tone.js objects for a synth instance
@@ -525,6 +546,7 @@ export {
     updateMasterLimiter,
     getMasterMeterValues,
     scaleLfoDepth,
+    rewireFxChain,
     unlockIOSAudioOnce
 };
 

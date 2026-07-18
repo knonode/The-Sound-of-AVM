@@ -30,6 +30,7 @@ import {
     updateMasterLimiter,
     getMasterMeterValues,
     scaleLfoDepth,
+    rewireFxChain,
     synthsInitialized,
     isMasterMuted,
     masterVolumeBeforeMute,
@@ -1498,6 +1499,8 @@ export async function bootLegacySynth() {
   initializeEventListeners();
   startMeterLoop();
   startStallCounter();
+  // Debug/test hook (activeSynths itself is reassigned on preset load)
+  window.getActiveSynths = () => activeSynths;
   initXenakisViz(document.getElementById('xenakis-canvas'));
   initLoomViz(document.getElementById('loom-canvas'));
 
@@ -2246,6 +2249,7 @@ const handleDelayWetChangeLogic = (instanceId, valueStr, inputElement) => {
     if (display) display.textContent = value.toFixed(2);
     // Update Tone object
     instance.toneObjects?.delay?.wet?.rampTo(value, 0.02);
+    if (instance.toneObjects) rewireFxChain(instance.toneObjects, instance.settings);
 };
 
 const handleReverbDecayChangeLogic = (instanceId, valueStr, inputElement) => {
@@ -2287,6 +2291,7 @@ const handleReverbWetChangeLogic = (instanceId, valueStr, inputElement) => {
     if (display) display.textContent = value.toFixed(2);
     // Update Tone object
     instance.toneObjects?.reverb?.wet?.rampTo(value, 0.02);
+    if (instance.toneObjects) rewireFxChain(instance.toneObjects, instance.settings);
 };
 
 // --- Base Note / Octave Logic ---
