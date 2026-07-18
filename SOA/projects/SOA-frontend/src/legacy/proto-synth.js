@@ -165,12 +165,17 @@ function startLoadReadout() {
 
     if (!native.audioWorklet) { el.textContent = 'glitches: n/a'; return; }
     const src = `registerProcessor('glitch-sentinel', class extends AudioWorkletProcessor {
-        constructor() { super(); this.w0 = 0; this.lastPost = 0; }
+        constructor() { super(); this.w0 = 0; this.lastPost = 0; this.min = Infinity; this.max = -Infinity; }
         process() {
             if (!this.w0) { this.w0 = Date.now(); this.a0 = currentTime; }
+            const drift = (Date.now() - this.w0) / 1000 - (currentTime - this.a0);
+            if (drift < this.min) this.min = drift;
+            if (drift > this.max) this.max = drift;
             if (currentTime - this.lastPost >= 0.25) {
                 this.lastPost = currentTime;
-                this.port.postMessage((Date.now() - this.w0) / 1000 - (currentTime - this.a0));
+                this.port.postMessage([this.min, this.max]);
+                this.min = Infinity;
+                this.max = -Infinity;
             }
             return true;
         }
@@ -180,21 +185,35 @@ function startLoadReadout() {
         const node = new AudioWorkletNode(native, 'glitch-sentinel',
             { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] });
         node.connect(native.destination); // silent; only exists so it gets rendered
-        let prev = null;
+        // Even a healthy renderer works in bursts, so the drift signal
+        // oscillates by the output buffer size at all times. Learn that
+        // normal amplitude first; only excursions beyond it are actual
+        // gaps. >0.5s means the context was suspended — relearn instead.
+        let normalAmp = null;
+        let learned = 0;
         let count = 0;
         let totalMs = 0;
+        let wasIdle = true;
         node.port.onmessage = (ev) => {
-            const drift = ev.data;
-            if (prev !== null) {
-                const jump = drift - prev;
-                // > 0.5s = context was suspended, not a glitch: just re-baseline.
-                // > 4ms (over one render quantum + clock noise) = audible gap.
-                if (jump > 0.004 && jump < 0.5) {
-                    count++;
-                    totalMs += Math.round(jump * 1000);
-                }
+            // Chromium idles the physical output stream when the context is
+            // silent, making render cadence irregular by design — only what
+            // happens while the stream plays is worth counting, and each
+            // start relearns the live cadence.
+            if (!isPlaying) { wasIdle = true; return; }
+            if (wasIdle) { wasIdle = false; normalAmp = null; learned = 0; }
+            const [min, max] = ev.data;
+            if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+            const amp = max - min;
+            if (amp > 0.5) { normalAmp = null; learned = 0; return; }
+            if (learned < 8) {
+                normalAmp = normalAmp === null ? amp : Math.max(normalAmp, amp);
+                learned++;
+            } else if (amp > normalAmp * 1.5 + 0.010) {
+                count++;
+                totalMs += Math.round((amp - normalAmp) * 1000);
+            } else {
+                normalAmp = normalAmp * 0.98 + amp * 0.02; // track slow drift on clean intervals
             }
-            prev = drift;
             el.textContent = `glitches: ${count}${totalMs ? ` (${totalMs}ms)` : ''}`;
             el.classList.toggle('bad', count > 0);
         };
