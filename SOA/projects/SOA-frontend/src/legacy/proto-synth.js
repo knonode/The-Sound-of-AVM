@@ -393,7 +393,7 @@ const createSynthHTML = (synthInstance) => {
     // --- Generate Header HTML ---
     const headerHTML = `
         <div class="synth-header">
-            <div class="led" id="led-${uniqueId}"></div>
+            <div class="led" id="led-${uniqueId}" title="click to test this sound"></div>
             <select class="type-select" data-instance-id="${uniqueId}" title="Select Transaction Type">
                 <option value="">Type</option>
                 ${mainTxTypes.map(t => `<option value="${t}" ${config.type === t ? 'selected' : ''}>${t}</option>`).join('')}
@@ -683,6 +683,7 @@ function showStateProofOverlay(rawTx) {
 
         const overlay = document.createElement('div');
         overlay.className = 'stpf-overlay';
+        overlay.title = 'click to dismiss';
         const pre = document.createElement('pre');
         pre.textContent = json;
         overlay.appendChild(pre);
@@ -703,6 +704,8 @@ function showStateProofOverlay(rawTx) {
             const cleanup = () => { overlay.remove(); stpfOverlayActive = false; };
             anim.onfinish = cleanup;
             anim.oncancel = cleanup;
+            // Immersion escape hatch: a click ends the sweep early
+            overlay.addEventListener('click', () => anim.cancel(), { once: true });
         });
     } catch (err) {
         console.warn('State proof overlay failed:', err);
@@ -1961,6 +1964,20 @@ const initializeEventListeners = () => {
 
 // --- Delegated Event Handlers ---
 
+// Click-to-audition: fire a synth by hand (rare types like hb can be hours
+// apart). Initializes audio on demand, so it works before the stream starts.
+async function testFireSynth(instanceId) {
+    const instance = findInstance(instanceId);
+    if (!instance || instance.id === 'master') return;
+    if (!instance.toneObjects) {
+        try { await initializeToneForInstance(instance); } catch (err) {
+            console.error('Could not initialize audio for test trigger:', err);
+            return;
+        }
+    }
+    if (instance.toneObjects) playTransactionSoundWithUI(instance, 0);
+}
+
 const handleContainerClick = (e) => {
     const target = e.target;
     // Find the closest parent synth element to get the instance ID
@@ -1970,7 +1987,9 @@ const handleContainerClick = (e) => {
     if (!instanceId) return; // Should not happen if structure is correct
 
     // Determine which control was clicked and call the appropriate logic function
-    if (target.matches('.mute-btn') || target.closest('.mute-btn')) { // Handle clicks on SVG inside button
+    if (target.matches('.led')) {
+        testFireSynth(instanceId); // audition without waiting for a matching tx
+    } else if (target.matches('.mute-btn') || target.closest('.mute-btn')) { // Handle clicks on SVG inside button
         handleMuteLogic(instanceId, synthElement.querySelector('.mute-btn')); // Pass button itself
     } else if (target.matches('.close-btn')) {
         handleCloseLogic(instanceId, synthElement);

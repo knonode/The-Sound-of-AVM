@@ -108,6 +108,7 @@
         .led {
             width: 8px;
             height: 8px;
+            flex: 0 0 8px; /* never let the flex header crush the dot */
             border-radius: 50%;
             background-color: #333;
             margin-right: 0; /* Remove default margin if any */
@@ -282,6 +283,7 @@
             opacity: 0.45;
             cursor: not-allowed;
         }
+        .mini-synth .led { cursor: pointer; }
 
         .aggr-cap-hint {
             font-size: 9px;
@@ -293,7 +295,7 @@
             position: fixed;
             inset: 0;
             z-index: 200;
-            pointer-events: none;
+            cursor: pointer; /* click anywhere to dismiss */
             background: rgba(0, 22, 14, 0.82); /* dark, hint of deep green */
             overflow: hidden;
         }
