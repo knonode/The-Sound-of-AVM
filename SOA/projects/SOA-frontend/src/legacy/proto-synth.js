@@ -458,8 +458,8 @@ const createMasterSynthHTML = () => {
         <!-- Limiter Section -->
         <div class="limiter-section">
             <span class="control-label">Limiter</span>
-            <div class="control-row"><span class="control-label">Threshold: <span id="${uniqueId}-limit-thresh-val">-2.0 dB</span></span></div>
-            <div class="control-row"><input type="range" id="${uniqueId}-limit-thresh" min="-6" max="-2" step="0.1" value="-2" data-instance-id="${uniqueId}"></div>
+            <div class="control-row"><span class="control-label">Threshold: <span id="${uniqueId}-limit-thresh-val">-3.0 dB</span></span></div>
+            <div class="control-row"><input type="range" id="${uniqueId}-limit-thresh" min="-6" max="-2" step="0.1" value="-3" data-instance-id="${uniqueId}"></div>
         </div>
     `;
 
@@ -1316,7 +1316,7 @@ export async function bootLegacySynth() {
       container.innerHTML = ''; // Clear previous buttons
 
       // Add buttons for server presets
-      ['presets/max-pain.json', 'presets/vanilla.json', 'presets/block-anxiety.json', 'presets/fable-the-magnificent.json'].forEach(name => {
+      ['presets/max-pain.json', 'presets/vanilla.json', 'presets/block-anxiety.json', 'presets/ceremony-in-d.json'].forEach(name => {
         const button = document.createElement('button');
         button.textContent = name.replace(/^presets\//, '').replace('.json', '');
         button.dataset.fileName = name;
