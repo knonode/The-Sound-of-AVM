@@ -273,6 +273,16 @@
         }
         #load-readout.bad { color: #ff7a66; }
 
+        #current-preset-label {
+            font-size: 11px;
+            color: #5a9a9a;
+            margin-bottom: 8px;
+        }
+        .modal-buttons button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
         .aggr-cap-hint {
             font-size: 9px;
             color: #5a9a9a;

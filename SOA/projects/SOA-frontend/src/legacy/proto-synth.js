@@ -1297,6 +1297,12 @@ async function loadPresetFromSource(source) {
         }
 
         updateStatus(`Preset "${presetName}" loaded`);
+        // URL loads are the premade server presets (read-only); a File
+        // import is an unsaved layout until the user saves it.
+        currentPreset = {
+            name: presetName.replace(/\.json$/, ''),
+            source: typeof source === 'string' ? 'server' : null
+        };
         document.getElementById('load-preset-modal').style.display = 'none';
 
     } catch (error) {
@@ -1306,16 +1312,12 @@ async function loadPresetFromSource(source) {
 }
 
 // <<< Function to save the current layout from the top bar >>>
-function savePresetLayout() {
-    const nameInput = document.getElementById('new-preset-name');
-    const presetName = nameInput.value.trim();
-    if (!presetName) {
-        alert('Please enter a preset name.');
-        return;
-    }
+// What is loaded right now, so Save knows what it would overwrite.
+// source: 'local' (user's localStorage, overwritable) | 'server' (premade,
+// read-only) | null (scratch layout, imported file, NFT).
+let currentPreset = { name: null, source: null };
 
-    const downloadToggle = document.getElementById('download-json-toggle');
-
+function writePreset(presetName, download) {
     const presetData = {
         activeSynths: activeSynths.filter(instance => instance.id !== 'master').map(instance => ({
             id: instance.id,
@@ -1325,27 +1327,26 @@ function savePresetLayout() {
     };
     const jsonString = JSON.stringify(presetData, null, 4);
 
-    // Save to Local Storage
     try {
         const presets = JSON.parse(localStorage.getItem('txSynthPresets') || '{}');
         presets[presetName] = presetData;
         localStorage.setItem('txSynthPresets', JSON.stringify(presets));
         updateStatus(`Preset "${presetName}" saved to My Presets`);
 
-    // === Send compressed preset to parent window for NFT minting ===
-    try {
-        const compressed = btoa(unescape(encodeURIComponent(jsonString)));
-        window.postMessage({ type: 'PRESET_SAVED', preset: compressed }, '*');
-    } catch (err) {
-        console.error('Failed to post compressed preset to parent:', err);
-    }
+        // === Send compressed preset to parent window for NFT minting ===
+        try {
+            const compressed = btoa(unescape(encodeURIComponent(jsonString)));
+            window.postMessage({ type: 'PRESET_SAVED', preset: compressed }, '*');
+        } catch (err) {
+            console.error('Failed to post compressed preset to parent:', err);
+        }
     } catch (error) {
         console.error("Error saving preset to Local Storage:", error);
         alert("Failed to save preset to Local Storage.");
+        return false;
     }
 
-    // Download as JSON file if toggled
-    if (downloadToggle.checked) {
+    if (download) {
         try {
             const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -1361,10 +1362,74 @@ function savePresetLayout() {
             alert("Could not download the file.");
         }
     }
+    return true;
+}
 
+function localPresetNames() {
+    return Object.keys(JSON.parse(localStorage.getItem('txSynthPresets') || '{}'));
+}
+
+function updateSaveModalState() {
+    const label = document.getElementById('current-preset-label');
+    const saveBtn = document.getElementById('save-overwrite-btn');
+    if (!label || !saveBtn) return;
+    if (currentPreset.source === 'local') {
+        label.textContent = `current: ${currentPreset.name}`;
+        saveBtn.disabled = false;
+        saveBtn.title = `Overwrite "${currentPreset.name}"`;
+    } else if (currentPreset.source === 'server') {
+        label.textContent = `current: ${currentPreset.name} (premade)`;
+        saveBtn.disabled = true;
+        saveBtn.title = "Premade presets can't be overwritten — use Save As... or Save a Copy";
+    } else {
+        label.textContent = currentPreset.name
+            ? `current: ${currentPreset.name} (unsaved)`
+            : 'current: unsaved layout';
+        saveBtn.disabled = true;
+        saveBtn.title = 'Nothing saved yet — use Save As...';
+    }
+}
+
+function closeSaveModal() {
     document.getElementById('save-preset-modal').style.display = 'none';
-    nameInput.value = '';
-    downloadToggle.checked = false;
+    const nameInput = document.getElementById('new-preset-name');
+    if (nameInput) nameInput.value = '';
+    const downloadToggle = document.getElementById('download-json-toggle');
+    if (downloadToggle) downloadToggle.checked = false;
+}
+
+function handleSaveOverwrite() {
+    if (currentPreset.source !== 'local') return; // button is disabled anyway
+    if (writePreset(currentPreset.name, document.getElementById('download-json-toggle').checked)) {
+        closeSaveModal();
+    }
+}
+
+function handleSaveAs() {
+    const presetName = document.getElementById('new-preset-name').value.trim();
+    if (!presetName) {
+        alert('Please enter a preset name.');
+        return;
+    }
+    if (localPresetNames().includes(presetName)
+        && !confirm(`A preset named "${presetName}" already exists. Overwrite it?`)) {
+        return;
+    }
+    if (writePreset(presetName, document.getElementById('download-json-toggle').checked)) {
+        currentPreset = { name: presetName, source: 'local' };
+        closeSaveModal();
+    }
+}
+
+function handleSaveCopy() {
+    const base = currentPreset.name || 'untitled';
+    const taken = localPresetNames();
+    let candidate = `${base} copy`;
+    for (let n = 2; taken.includes(candidate); n++) candidate = `${base} copy ${n}`;
+    // The copy is a snapshot: the working preset stays the current one.
+    if (writePreset(candidate, document.getElementById('download-json-toggle').checked)) {
+        closeSaveModal();
+    }
 }
 
 // Listen for preset load messages from parent window
@@ -1402,7 +1467,9 @@ export async function bootLegacySynth() {
   const modalPresetButtons = document.getElementById('modal-preset-buttons');
   const saveModalClose = document.getElementById('save-modal-close');
   const loadModalClose = document.getElementById('load-modal-close');
-  const saveNewPresetBtn = document.getElementById('save-new-preset-btn');
+  const saveOverwriteBtn = document.getElementById('save-overwrite-btn');
+  const saveAsBtn = document.getElementById('save-as-btn');
+  const saveCopyBtn = document.getElementById('save-copy-btn');
   const presetFileInput = document.getElementById('preset-file-input');
   const toggleAggrBtn = document.getElementById('toggle-aggr-btn');
 
@@ -1545,6 +1612,7 @@ export async function bootLegacySynth() {
       }
   });
   savePresetTopBtn.addEventListener('click', () => {
+      updateSaveModalState();
       saveModal.style.display = 'block';
   });
 
@@ -1570,7 +1638,9 @@ export async function bootLegacySynth() {
       }
   });
 
-  saveNewPresetBtn.addEventListener('click', savePresetLayout);
+  saveOverwriteBtn.addEventListener('click', handleSaveOverwrite);
+  saveAsBtn.addEventListener('click', handleSaveAs);
+  saveCopyBtn.addEventListener('click', handleSaveCopy);
 
   presetFileInput.addEventListener('change', (event) => {
       const file = event.target.files[0];
@@ -2799,6 +2869,7 @@ const loadPresetFromLocalStorage = async (presetNameToLoad) => {
   // updateAllSequencerDisplays(); // TODO: Implement this later
   console.log(`Preset "${presetName}" loaded successfully.`);
   updateStatus(`Preset "${presetName}" loaded`);
+  currentPreset = { name: presetName, source: 'local' };
   // Optionally clear status after a delay
   // setTimeout(() => updateStatus('Streaming...'), 2000);
 };

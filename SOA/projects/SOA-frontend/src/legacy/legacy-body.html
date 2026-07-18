@@ -92,14 +92,17 @@
     <div id="save-preset-modal" class="legacy-modal">
         <div class="modal-content">
             <span class="modal-close" id="save-modal-close">&times;</span>
-            <h2>Save Preset Layout</h2>
-            <input type="text" id="new-preset-name" placeholder="Enter preset name...">
+            <h2>Save Preset</h2>
+            <div id="current-preset-label">current: unsaved layout</div>
+            <input type="text" id="new-preset-name" placeholder="Name (for Save As...)">
             <div class="modal-options">
                 <input type="checkbox" id="download-json-toggle" style="vertical-align: middle;">
-                <label for="download-json-toggle">Download as .json file</label>
+                <label for="download-json-toggle">Also download as .json file</label>
             </div>
             <div class="modal-buttons">
-                <button id="save-new-preset-btn">Save Locally</button>
+                <button id="save-overwrite-btn" disabled>Save</button>
+                <button id="save-as-btn">Save As...</button>
+                <button id="save-copy-btn">Save a Copy</button>
             </div>
 
             <hr style="margin: 12px 0; opacity: 0.4;" />
