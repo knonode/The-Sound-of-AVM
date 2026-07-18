@@ -207,8 +207,9 @@ async function initAudio() {
       masterLimiter.toDestination(); // Final connection to speakers
 
       // Shared reverb bus (wet 1 = pure effect; the dry path goes straight
-      // to masterEQ, so this only ever carries the reverb tail)
-      sharedReverb = new Tone.Freeverb({ roomSize: 0.7, wet: 1 });
+      // to masterEQ, so this only ever carries the reverb tail). Convolution
+      // beats Freeverb on quality, and one instance is affordable now.
+      sharedReverb = new Tone.Reverb({ decay: 4, preDelay: 0.01, wet: 1 });
       sharedReverb.connect(masterEQ);
 
       // Read-only stereo tap for the master ladder meters
@@ -277,7 +278,7 @@ async function initializeToneForInstance(instance) {
             const desiredRoomSize = (typeof settings.reverb?.roomSize === 'number')
                 ? settings.reverb.roomSize
                 : Math.max(0.05, Math.min(0.95, ((settings.reverb?.decay ?? 1.5) / 10)));
-            sharedReverb.roomSize.value = desiredRoomSize;
+            updateSharedReverbRoomSize(desiredRoomSize);
         }
 
         // Polyphonic voice: overlapping transactions layer instead of
@@ -377,15 +378,19 @@ function rewireFxChain(toneObjects, settings) {
     toneObjects._fxWiring = { delayOn, reverbOn };
 }
 
-// Room size is a property of the shared bus — any synth's slider moves it
+// Room size is a property of the shared bus — any synth's slider moves it.
+// The 0-1 knob maps to convolution decay: 0.3s tight room up to a 7s hall.
+// Setting decay regenerates the impulse response (expensive, async), so
+// slider streams are debounced down to one rebuild.
+let reverbSizeTimer = null;
 function updateSharedReverbRoomSize(value) {
     if (!sharedReverb) return;
     const size = Math.max(0, Math.min(1, value));
-    if (sharedReverb.roomSize.rampTo) {
-        sharedReverb.roomSize.rampTo(size, 0.02);
-    } else {
-        sharedReverb.roomSize.value = size;
-    }
+    const decay = 0.3 + size * 6.7;
+    clearTimeout(reverbSizeTimer);
+    reverbSizeTimer = setTimeout(() => {
+        try { sharedReverb.decay = decay; } catch (e) { console.error('Reverb decay update failed:', e); }
+    }, 250);
 }
 
 // Dispose of Tone.js objects for a synth instance
