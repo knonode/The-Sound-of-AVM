@@ -437,11 +437,14 @@ function playTransactionSound(instance, timeOffset = 0, opts = {}) {
 
 
   try {
-    // Monophonic synths reject two triggers at the same time; nudge each
-    // trigger to be strictly after the previous one for this instance.
+    // Gossip hands us clumps: many txs can land within one relay batch.
+    // Spacing clumped triggers >= 30ms apart bounds how many graph
+    // mutations (oscillator builds) hit a single render quantum and stops
+    // phase-aligned onsets summing into a thump. Naturally spaced arrivals
+    // (> 30ms apart) keep their raw timing untouched.
     let when = Tone.now() + timeOffset;
-    if (toneObjects._lastTriggerTime !== undefined && when <= toneObjects._lastTriggerTime) {
-      when = toneObjects._lastTriggerTime + 0.005;
+    if (toneObjects._lastTriggerTime !== undefined && when <= toneObjects._lastTriggerTime + 0.030) {
+      when = toneObjects._lastTriggerTime + 0.030;
     }
     toneObjects._lastTriggerTime = when;
     toneObjects.synth.triggerAttackRelease(note, duration, when, velocity);
