@@ -236,6 +236,10 @@ function buildOscillatorOptions(oscillator) {
 
 // Create Tone.js objects for a single synth instance
 async function initializeToneForInstance(instance) {
+    // The master card is a mixer strip, not an instrument: its audio is the
+    // module-level master chain (EQ -> compressor -> limiter). Building a
+    // voice rack for it would render silently forever.
+    if (instance.id === 'master') return;
     // Ensure audio context is started before creating nodes
     if (!synthsInitialized) {
         console.warn("Audio context not started, attempting start before initializing instance:", instance.id);
