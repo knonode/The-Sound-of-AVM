@@ -138,6 +138,70 @@ function startMeterLoop() {
     requestAnimationFrame(tick);
 }
 
+// Temporary diagnostic: audible-glitch counter, faster and more honest
+// than the DevTools capacity display. Uses the renderCapacity API where
+// available (load% + real underrun counts); otherwise a worklet sentinel
+// measures audio-clock vs wall-clock drift — every upward jump is rendered
+// time the output never received, i.e. an audible gap.
+function startLoadReadout() {
+    const el = document.getElementById('load-readout');
+    if (!el) return;
+    // Tone's rawContext is a standardized-audio-context wrapper; reach the
+    // real browser AudioContext underneath (same render thread, same graph).
+    const raw = Tone.getContext().rawContext;
+    const native = raw._nativeAudioContext ?? raw;
+
+    const cap = native.renderCapacity;
+    if (cap && typeof cap.start === 'function') {
+        let glitches = 0;
+        const quantaPerInterval = (0.25 * (native.sampleRate || 48000)) / 128;
+        cap.addEventListener('update', (e) => {
+            glitches += Math.round((e.underrunRatio ?? 0) * quantaPerInterval);
+            el.textContent = `load: ${Math.round(e.averageLoad * 100)}% pk ${Math.round(e.peakLoad * 100)}% glitches: ${glitches}`;
+            el.classList.toggle('bad', (e.underrunRatio ?? 0) > 0 || e.peakLoad > 0.95);
+        });
+        try { cap.start({ updateInterval: 0.25 }); return; } catch { /* fall through */ }
+    }
+
+    if (!native.audioWorklet) { el.textContent = 'glitches: n/a'; return; }
+    const src = `registerProcessor('glitch-sentinel', class extends AudioWorkletProcessor {
+        constructor() { super(); this.w0 = 0; this.lastPost = 0; }
+        process() {
+            if (!this.w0) { this.w0 = Date.now(); this.a0 = currentTime; }
+            if (currentTime - this.lastPost >= 0.25) {
+                this.lastPost = currentTime;
+                this.port.postMessage((Date.now() - this.w0) / 1000 - (currentTime - this.a0));
+            }
+            return true;
+        }
+    });`;
+    const url = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+    native.audioWorklet.addModule(url).then(() => {
+        const node = new AudioWorkletNode(native, 'glitch-sentinel',
+            { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] });
+        node.connect(native.destination); // silent; only exists so it gets rendered
+        let prev = null;
+        let count = 0;
+        let totalMs = 0;
+        node.port.onmessage = (ev) => {
+            const drift = ev.data;
+            if (prev !== null) {
+                const jump = drift - prev;
+                // > 0.5s = context was suspended, not a glitch: just re-baseline.
+                // > 4ms (over one render quantum + clock noise) = audible gap.
+                if (jump > 0.004 && jump < 0.5) {
+                    count++;
+                    totalMs += Math.round(jump * 1000);
+                }
+            }
+            prev = drift;
+            el.textContent = `glitches: ${count}${totalMs ? ` (${totalMs}ms)` : ''}`;
+            el.classList.toggle('bad', count > 0);
+        };
+        el.textContent = 'glitches: 0';
+    }).catch(() => { el.textContent = 'glitches: n/a'; });
+}
+
 // Temporary diagnostic: count main-thread stalls (>50ms long tasks).
 // Late note scheduling from stalls = scratches and dropouts.
 function startStallCounter() {
@@ -1500,6 +1564,7 @@ export async function bootLegacySynth() {
   initializeEventListeners();
   startMeterLoop();
   startStallCounter();
+  startLoadReadout();
   // Debug/test hook (activeSynths itself is reassigned on preset load)
   window.getActiveSynths = () => activeSynths;
   initXenakisViz(document.getElementById('xenakis-canvas'));

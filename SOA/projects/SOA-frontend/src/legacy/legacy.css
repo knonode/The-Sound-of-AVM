@@ -258,12 +258,20 @@
         }
 
         #stall-counter {
-            margin-right: auto; /* pin to the left of the actions bar */
             font-size: 10px;
             color: #5a9a9a;
             align-self: center;
         }
         #stall-counter.bad { color: #ff7a66; }
+
+        #load-readout {
+            margin-right: auto; /* pin the diagnostics to the left of the actions bar */
+            margin-left: 10px;
+            font-size: 10px;
+            color: #5a9a9a;
+            align-self: center;
+        }
+        #load-readout.bad { color: #ff7a66; }
 
         .aggr-cap-hint {
             font-size: 9px;
