@@ -514,6 +514,63 @@
                 ],
                 "currentStepIndex": 0
             }
+        },
+        {
+            "id": "fable-stpf-afterglow",
+            "config": {
+                "type": "stpf",
+                "subtype": "stpf",
+                "parameters": {
+                    "label": "afterglow"
+                }
+            },
+            "settings": {
+                "oscillator": {
+                    "type": "fattriangle"
+                },
+                "envelope": {
+                    "attack": 8,
+                    "decay": 2,
+                    "sustain": 0.6,
+                    "release": 8
+                },
+                "volume": -16,
+                "pan": 0.15,
+                "muted": false,
+                "savedVolume": null,
+                "mutedByMaster": false,
+                "filter": {
+                    "cutoff": 1400
+                },
+                "delay": {
+                    "time": 0.6,
+                    "feedback": 0.45,
+                    "wet": 0.35
+                },
+                "reverb": {
+                    "roomSize": 0.95,
+                    "wet": 0.9
+                },
+                "lfo": {
+                    "rate": 0.25,
+                    "depth": 6,
+                    "waveform": "sine",
+                    "destination": "pitch"
+                },
+                "noteDuration": 5,
+                "baseNote": "A3",
+                "sequence": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "currentStepIndex": 0
+            }
         }
     ]
 }
