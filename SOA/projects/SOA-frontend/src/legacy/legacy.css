@@ -285,6 +285,39 @@
         }
         .mini-synth .led { cursor: pointer; }
 
+        /* Editable value displays: look like the old text until focused */
+        .value-input {
+            width: 58px;
+            background-color: rgba(0, 0, 0, 0.2);
+            color: #029e0a;
+            border: 1px solid transparent;
+            border-radius: 3px;
+            font-size: 10px;
+            padding: 0 2px;
+        }
+        .value-input:hover, .value-input:focus {
+            border-color: #004d4d;
+            outline: none;
+        }
+        .adsr-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .adsr-row input[type="range"] {
+            flex: 1;
+            min-width: 0;
+        }
+        .adsr-label {
+            flex: 0 0 10px;
+            width: 10px;
+            cursor: help;
+        }
+        .value-input.adsr-num {
+            width: 46px;
+            flex: 0 0 46px;
+        }
+
         .aggr-cap-hint {
             font-size: 9px;
             color: #5a9a9a;

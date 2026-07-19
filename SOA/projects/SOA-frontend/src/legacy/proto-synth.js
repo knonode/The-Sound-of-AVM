@@ -260,6 +260,27 @@ function formatCutoff(hz) {
     return hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
 }
 
+// Log-scale time sliders: position 0-100 <-> seconds in [min, max].
+// The useful short range keeps most of the slider travel; the long tail
+// (drones, swells) lives in the last stretch.
+const TIME_RANGES = {
+    attack:   [0.001, 10],
+    decay:    [0.001, 10],
+    release:  [0.005, 10],
+    duration: [0.01, 20],
+    lfoRate:  [0.01, 30],
+};
+function sliderToTime(pos, [min, max]) {
+    return min * Math.pow(max / min, pos / 100);
+}
+function timeToSlider(t, [min, max]) {
+    const clamped = Math.max(min, Math.min(max, t));
+    return Math.round(100 * Math.log(clamped / min) / Math.log(max / min));
+}
+function formatSecs(t) {
+    return t >= 10 ? `${t.toFixed(1)}s` : t >= 1 ? `${t.toFixed(2)}s` : `${t.toFixed(3)}s`;
+}
+
 function getDefaultInstanceSettings() {
     return {
         oscillator: { type: 'sine' },
@@ -417,13 +438,13 @@ const createSynthHTML = (synthInstance) => {
         <!-- Volume Section -->
         <div class="volume-section">
             <div class="control-row">
-                <span class="control-label">Volume: <span id="${uniqueId}-volume-value">${currentVolume.toFixed(1)} dB</span></span>
+                <span class="control-label">Volume: <input class="value-input" id="${uniqueId}-volume-value" value="${currentVolume.toFixed(1)} dB" data-instance-id="${uniqueId}" data-vctrl="volume" title="Volume in dB — type a value"></span>
             </div>
             <div class="control-row">
                 <input type="range" id="${uniqueId}-volume" min="-24" max="3" step="0.5" value="${currentVolume}" data-instance-id="${uniqueId}">
             </div>
             <div class="control-row">
-                <span class="control-label">Pan: <span id="${uniqueId}-pan-value">${formatPan(settings.pan ?? 0)}</span></span>
+                <span class="control-label">Pan: <input class="value-input" id="${uniqueId}-pan-value" value="${formatPan(settings.pan ?? 0)}" data-instance-id="${uniqueId}" data-vctrl="pan" title="Pan: -100 (L) to 100 (R), or e.g. 25L / 25R / C"></span>
             </div>
             <div class="control-row">
                 <input type="range" id="${uniqueId}-pan" min="-100" max="100" step="1" value="${Math.round((settings.pan ?? 0) * 100)}" data-instance-id="${uniqueId}">
@@ -453,28 +474,34 @@ const createSynthHTML = (synthInstance) => {
         <!-- Gate Time Section -->
         <div class="gate-section">
             <div class="control-row">
-                <span class="control-label">Gate Time: <span id="${uniqueId}-note-duration-value">${settings.noteDuration.toFixed(2)}s</span></span>
+                <span class="control-label">Gate Time: <input class="value-input" id="${uniqueId}-note-duration-value" value="${formatSecs(settings.noteDuration)}" data-instance-id="${uniqueId}" data-vctrl="duration" title="Note duration in seconds (0.01-20) — type a value"></span>
             </div>
             <div class="control-row">
-                <input type="range" id="${uniqueId}-note-duration" min="0.01" max="0.5" step="0.01" value="${settings.noteDuration}" data-instance-id="${uniqueId}">
+                <input type="range" id="${uniqueId}-note-duration" min="0" max="100" step="1" value="${timeToSlider(settings.noteDuration, TIME_RANGES.duration)}" data-instance-id="${uniqueId}">
             </div>
         </div>
 
         <!-- ADSR Section -->
         <div class="adsr-section">
-            <div class="control-row">
-                <span class="control-label">Attack</span> <span class="control-label">Decay</span>
+            <div class="control-row adsr-row">
+                <span class="control-label adsr-label" title="Attack: seconds to reach full level (0.001-10)">A</span>
+                <input type="range" id="${uniqueId}-attack" min="0" max="100" step="1" value="${timeToSlider(settings.envelope.attack, TIME_RANGES.attack)}" data-instance-id="${uniqueId}" data-param="attack">
+                <input class="value-input adsr-num" id="${uniqueId}-attack-value" value="${formatSecs(settings.envelope.attack)}" data-instance-id="${uniqueId}" data-vctrl="attack" title="Attack in seconds — type a value">
             </div>
-            <div class="control-row">
-                <input type="range" id="${uniqueId}-attack" min="0" max="1" step="0.01" value="${settings.envelope.attack}" data-instance-id="${uniqueId}" data-param="attack">
-                <input type="range" id="${uniqueId}-decay" min="0" max="1" step="0.01" value="${settings.envelope.decay}" data-instance-id="${uniqueId}" data-param="decay">
+            <div class="control-row adsr-row">
+                <span class="control-label adsr-label" title="Decay: seconds from peak down to sustain level (0.001-10)">D</span>
+                <input type="range" id="${uniqueId}-decay" min="0" max="100" step="1" value="${timeToSlider(settings.envelope.decay, TIME_RANGES.decay)}" data-instance-id="${uniqueId}" data-param="decay">
+                <input class="value-input adsr-num" id="${uniqueId}-decay-value" value="${formatSecs(settings.envelope.decay)}" data-instance-id="${uniqueId}" data-vctrl="decay" title="Decay in seconds — type a value">
             </div>
-            <div class="control-row">
-                <span class="control-label">Sustain</span> <span class="control-label">Release</span>
-            </div>
-            <div class="control-row">
+            <div class="control-row adsr-row">
+                <span class="control-label adsr-label" title="Sustain: held level while the note lasts (0-1)">S</span>
                 <input type="range" id="${uniqueId}-sustain" min="0" max="1" step="0.01" value="${settings.envelope.sustain}" data-instance-id="${uniqueId}" data-param="sustain">
-                <input type="range" id="${uniqueId}-release" min="0" max="2" step="0.01" value="${settings.envelope.release}" data-instance-id="${uniqueId}" data-param="release">
+                <input class="value-input adsr-num" id="${uniqueId}-sustain-value" value="${settings.envelope.sustain.toFixed(2)}" data-instance-id="${uniqueId}" data-vctrl="sustain" title="Sustain level 0-1 — type a value">
+            </div>
+            <div class="control-row adsr-row">
+                <span class="control-label adsr-label" title="Release: seconds to fade after the note ends (0.005-10)">R</span>
+                <input type="range" id="${uniqueId}-release" min="0" max="100" step="1" value="${timeToSlider(settings.envelope.release, TIME_RANGES.release)}" data-instance-id="${uniqueId}" data-param="release">
+                <input class="value-input adsr-num" id="${uniqueId}-release-value" value="${formatSecs(settings.envelope.release)}" data-instance-id="${uniqueId}" data-vctrl="release" title="Release in seconds — type a value">
             </div>
         </div>
 
@@ -494,7 +521,7 @@ const createSynthHTML = (synthInstance) => {
                 </select>
             </div>
             <div class="control-row">
-                <span class="control-label">Cutoff: <span id="${uniqueId}-filter-cutoff-value">${formatCutoff(settings.filter?.cutoff ?? 20000)}</span></span>
+                <span class="control-label">Cutoff: <input class="value-input" id="${uniqueId}-filter-cutoff-value" value="${formatCutoff(settings.filter?.cutoff ?? 20000)}" data-instance-id="${uniqueId}" data-vctrl="cutoff" title="Cutoff in Hz (accepts e.g. 1200 or 1.2k) — type a value"></span>
             </div>
             <div class="control-row">
                 <input type="range" id="${uniqueId}-filter-cutoff" min="0" max="100" step="1" value="${cutoffToSlider(settings.filter?.cutoff ?? 20000)}" data-instance-id="${uniqueId}">
@@ -503,28 +530,28 @@ const createSynthHTML = (synthInstance) => {
 
         <!-- Delay Section (was Effect Controls) -->
         <div class="delay-section">
-            <div class="control-row"> <span class="control-label">Delay Time: <span id="${uniqueId}-delay-time-value">${settings.delay.time.toFixed(2)}s</span></span> </div>
-            <div class="control-row"> <input type="range" id="${uniqueId}-delay-time" min="0" max="1" step="0.01" value="${settings.delay.time}" data-instance-id="${uniqueId}"> </div>
-            <div class="control-row"> <span class="control-label">Feedback: <span id="${uniqueId}-delay-feedback-value">${settings.delay.feedback.toFixed(2)}</span></span> </div>
-            <div class="control-row"> <input type="range" id="${uniqueId}-delay-feedback" min="0" max="0.9" step="0.01" value="${settings.delay.feedback}" data-instance-id="${uniqueId}"> </div>
-            <div class="control-row"> <span class="control-label">Delay Wet: <span id="${uniqueId}-delay-wet-value">${settings.delay.wet.toFixed(2)}</span></span> </div>
+            <div class="control-row"> <span class="control-label">Delay Time: <input class="value-input" id="${uniqueId}-delay-time-value" value="${settings.delay.time.toFixed(2)}s" data-instance-id="${uniqueId}" data-vctrl="delay-time" title="Delay time in seconds (0-4) — type a value"></span> </div>
+            <div class="control-row"> <input type="range" id="${uniqueId}-delay-time" min="0" max="4" step="0.01" value="${settings.delay.time}" data-instance-id="${uniqueId}"> </div>
+            <div class="control-row"> <span class="control-label">Feedback: <input class="value-input" id="${uniqueId}-delay-feedback-value" value="${settings.delay.feedback.toFixed(2)}" data-instance-id="${uniqueId}" data-vctrl="delay-feedback" title="Feedback 0-0.95 — type a value"></span> </div>
+            <div class="control-row"> <input type="range" id="${uniqueId}-delay-feedback" min="0" max="0.95" step="0.01" value="${settings.delay.feedback}" data-instance-id="${uniqueId}"> </div>
+            <div class="control-row"> <span class="control-label">Delay Wet: <input class="value-input" id="${uniqueId}-delay-wet-value" value="${settings.delay.wet.toFixed(2)}" data-instance-id="${uniqueId}" data-vctrl="delay-wet" title="Delay wet 0-1 (0 = effect disconnected) — type a value"></span> </div>
             <div class="control-row"> <input type="range" id="${uniqueId}-delay-wet" min="0" max="1" step="0.01" value="${settings.delay.wet}" data-instance-id="${uniqueId}"> </div>
         </div>
 
         <!-- Reverb Section -->
         <div class="reverb-section">
-            <div class="control-row"> <span class="control-label">Room Size: <span id="${uniqueId}-reverb-size-value">${(settings.reverb.roomSize ?? Math.max(0.05, Math.min(0.95, ((settings.reverb.decay ?? 1.5) / 10)))).toFixed(2)}</span></span> </div>
+            <div class="control-row"> <span class="control-label">Room Size: <input class="value-input" id="${uniqueId}-reverb-size-value" value="${(settings.reverb.roomSize ?? Math.max(0.05, Math.min(0.95, ((settings.reverb.decay ?? 1.5) / 10)))).toFixed(2)}" data-instance-id="${uniqueId}" data-vctrl="reverb-size" title="Room size 0-1 (global: one shared hall) — type a value"></span> </div>
             <div class="control-row"> <input type="range" id="${uniqueId}-reverb-size" min="0" max="1" step="0.01" value="${(settings.reverb.roomSize ?? Math.max(0.05, Math.min(0.95, ((settings.reverb.decay ?? 1.5) / 10))))}" data-instance-id="${uniqueId}"> </div>
-            <div class="control-row"> <span class="control-label">Reverb Wet: <span id="${uniqueId}-reverb-wet-value">${settings.reverb.wet.toFixed(2)}</span></span> </div>
+            <div class="control-row"> <span class="control-label">Reverb Wet: <input class="value-input" id="${uniqueId}-reverb-wet-value" value="${settings.reverb.wet.toFixed(2)}" data-instance-id="${uniqueId}" data-vctrl="reverb-wet" title="Reverb send 0-1 (0 = disconnected) — type a value"></span> </div>
             <div class="control-row"> <input type="range" id="${uniqueId}-reverb-wet" min="0" max="1" step="0.01" value="${settings.reverb.wet}" data-instance-id="${uniqueId}"> </div>
         </div>
 
         <!-- LFO Section -->
         <div class="lfo-section">
             <span class="control-label">LFO</span>
-            <div class="control-row"> <span class="control-label">Rate: <span id="${uniqueId}-lfo-rate-value">${settings.lfo.rate.toFixed(1)} Hz</span></span> </div>
-            <div class="control-row"> <input type="range" id="${uniqueId}-lfo-rate" min="0.1" max="20" step="0.1" value="${settings.lfo.rate}" data-instance-id="${uniqueId}"> </div>
-            <div class="control-row"> <span class="control-label">Depth: <span id="${uniqueId}-lfo-depth-value">${settings.lfo.depth.toFixed(0)}</span></span> </div>
+            <div class="control-row"> <span class="control-label">Rate: <input class="value-input" id="${uniqueId}-lfo-rate-value" value="${settings.lfo.rate >= 1 ? settings.lfo.rate.toFixed(1) : settings.lfo.rate.toFixed(2)} Hz" data-instance-id="${uniqueId}" data-vctrl="lfo-rate" title="LFO rate in Hz (0.01-30) — type a value"></span> </div>
+            <div class="control-row"> <input type="range" id="${uniqueId}-lfo-rate" min="0" max="100" step="1" value="${timeToSlider(settings.lfo.rate, TIME_RANGES.lfoRate)}" data-instance-id="${uniqueId}"> </div>
+            <div class="control-row"> <span class="control-label">Depth: <input class="value-input" id="${uniqueId}-lfo-depth-value" value="${settings.lfo.depth.toFixed(0)}" data-instance-id="${uniqueId}" data-vctrl="lfo-depth" title="LFO depth 0-100 — type a value"></span> </div>
             <div class="control-row"> <input type="range" id="${uniqueId}-lfo-depth" min="0" max="100" step="1" value="${settings.lfo.depth}" data-instance-id="${uniqueId}"> </div>
 
             <div class="control-row">
@@ -543,6 +570,7 @@ const createSynthHTML = (synthInstance) => {
                     <option value="none" ${settings.lfo.destination === 'none' ? 'selected' : ''}>None</option>
                     <option value="pitch" ${settings.lfo.destination === 'pitch' ? 'selected' : ''}>Vibrato</option>
                     <option value="volume" ${settings.lfo.destination === 'volume' ? 'selected' : ''}>Volume</option>
+                    <option value="cutoff" ${settings.lfo.destination === 'cutoff' ? 'selected' : ''}>Cutoff</option>
                     <option value="delayTime" ${settings.lfo.destination === 'delayTime' ? 'selected' : ''}>Delay Time</option>
                 </select>
             </div>
@@ -1959,6 +1987,7 @@ const initializeEventListeners = () => {
     synthContainer.addEventListener('click', handleContainerClick);
     synthContainer.addEventListener('change', handleContainerChange);
     synthContainer.addEventListener('input', handleContainerInput);
+    synthContainer.addEventListener('keydown', handleContainerKeydown);
     console.log("Delegated event listeners attached to synthContainer.");
 };
 
@@ -2026,7 +2055,14 @@ const handleContainerChange = (e) => {
         handleLfoWaveformChangeLogic(instanceId, target.value);
     } else if (target.matches('.lfo-destination-select')) { // <<< ADDED >>>
         handleLfoDestinationChangeLogic(instanceId, target.value);
+    } else if (target.matches('.value-input')) {
+        handleTypedValue(instanceId, target);
     }
+};
+
+// Enter commits an editable value display (blur fires the change event)
+const handleContainerKeydown = (e) => {
+    if (e.key === 'Enter' && e.target.matches?.('.value-input')) e.target.blur();
 };
 
 const handleContainerInput = (e) => {
@@ -2094,14 +2130,20 @@ const handleContainerInput = (e) => {
         case 'sustain':
         case 'release':
              const param = target.dataset.param; // For envelope parts
-             if (param) handleEnvelopeChangeLogic(instanceId, param, target.value, target);
+             if (param) {
+                 // A/D/R sliders are log positions 0-100; sustain is direct
+                 const real = param === 'sustain'
+                     ? target.value
+                     : sliderToTime(parseFloat(target.value), TIME_RANGES[param]);
+                 handleEnvelopeChangeLogic(instanceId, param, real);
+             }
              // Check if it's reverb decay specifically
              else if (target.id.includes('-reverb-decay')) {
                  handleReverbDecayChangeLogic(instanceId, target.value, target);
              }
              break;
         case 'note-duration': // Changed from 'duration' to match ID
-             handleNoteDurationChangeLogic(instanceId, target.value, target);
+             handleNoteDurationChangeLogic(instanceId, sliderToTime(parseFloat(target.value), TIME_RANGES.duration));
              break;
         case 'pan':
             handlePanChangeLogic(instanceId, target.value);
@@ -2127,7 +2169,7 @@ const handleContainerInput = (e) => {
 
         // <<< LFO Controls >>>
         case 'lfo-rate':
-            handleLfoRateChangeLogic(instanceId, target.value, target);
+            handleLfoRateChangeLogic(instanceId, sliderToTime(parseFloat(target.value), TIME_RANGES.lfoRate));
             break;
         case 'lfo-depth':
             handleLfoDepthChangeLogic(instanceId, target.value, target);
@@ -2337,6 +2379,130 @@ const handleKeyregToggleLogic = (instanceId, buttonElement) => {
      }
  };
 
+// Typed values from the editable value displays: parse the unit-bearing
+// text, clamp to the control's real range, route through the same logic
+// as the sliders, and move the slider to match. Successful cases return;
+// falling out of the switch means the text didn't parse, and the field is
+// restored from settings so garbage never sticks.
+const handleTypedValue = (instanceId, inputEl) => {
+    const ctrl = inputEl.dataset.vctrl;
+    const raw = inputEl.value.trim();
+    const num = parseFloat(raw.replace(',', '.'));
+    const setSlider = (suffix, v) => {
+        const s = document.getElementById(`${instanceId}-${suffix}`);
+        if (s) s.value = v;
+    };
+    const clamped = (lo, hi) => Math.max(lo, Math.min(hi, num));
+
+    switch (ctrl) {
+        case 'volume':
+            if (!Number.isFinite(num)) break;
+            handleVolumeChangeLogic(instanceId, String(clamped(-60, 3)));
+            setSlider('volume', clamped(-60, 3));
+            return;
+        case 'pan': {
+            let v; // accepts -100..100, "25L", "25R", "C"
+            const m = raw.match(/^(\d+(?:\.\d+)?)\s*([LlRr])$/);
+            if (m) v = (m[2].toLowerCase() === 'l' ? -1 : 1) * parseFloat(m[1]);
+            else if (/^c$/i.test(raw)) v = 0;
+            else v = num;
+            if (!Number.isFinite(v)) break;
+            v = Math.max(-100, Math.min(100, Math.round(v)));
+            handlePanChangeLogic(instanceId, String(v));
+            setSlider('pan', v);
+            return;
+        }
+        case 'cutoff': {
+            let hz = /k/i.test(raw) ? num * 1000 : num; // accepts "1200" or "1.2k"
+            if (!Number.isFinite(hz)) break;
+            hz = Math.round(Math.max(50, Math.min(20000, hz)));
+            const instance = findInstance(instanceId);
+            if (!instance) break;
+            if (!instance.settings.filter) instance.settings.filter = {};
+            instance.settings.filter.cutoff = hz;
+            inputEl.value = formatCutoff(hz);
+            instance.toneObjects?.filter?.frequency?.rampTo(hz, 0.02);
+            setSlider('filter-cutoff', cutoffToSlider(hz));
+            return;
+        }
+        case 'duration':
+            if (!Number.isFinite(num)) break;
+            handleNoteDurationChangeLogic(instanceId, num);
+            setSlider('note-duration', timeToSlider(num, TIME_RANGES.duration));
+            return;
+        case 'attack':
+        case 'decay':
+        case 'release':
+            if (!Number.isFinite(num)) break;
+            handleEnvelopeChangeLogic(instanceId, ctrl, num);
+            setSlider(ctrl, timeToSlider(num, TIME_RANGES[ctrl]));
+            return;
+        case 'sustain':
+            if (!Number.isFinite(num)) break;
+            handleEnvelopeChangeLogic(instanceId, 'sustain', num);
+            setSlider('sustain', clamped(0, 1));
+            return;
+        case 'delay-time':
+            if (!Number.isFinite(num)) break;
+            handleDelayTimeChangeLogic(instanceId, String(clamped(0, 4)));
+            setSlider('delay-time', clamped(0, 4));
+            return;
+        case 'delay-feedback':
+            if (!Number.isFinite(num)) break;
+            handleDelayFeedbackChangeLogic(instanceId, String(clamped(0, 0.95)));
+            setSlider('delay-feedback', clamped(0, 0.95));
+            return;
+        case 'delay-wet':
+            if (!Number.isFinite(num)) break;
+            handleDelayWetChangeLogic(instanceId, String(clamped(0, 1)));
+            setSlider('delay-wet', clamped(0, 1));
+            return;
+        case 'reverb-size':
+            if (!Number.isFinite(num)) break;
+            handleReverbSizeChangeLogic(instanceId, String(clamped(0, 1)));
+            setSlider('reverb-size', clamped(0, 1));
+            return;
+        case 'reverb-wet':
+            if (!Number.isFinite(num)) break;
+            handleReverbWetChangeLogic(instanceId, String(clamped(0, 1)));
+            setSlider('reverb-wet', clamped(0, 1));
+            return;
+        case 'lfo-rate':
+            if (!Number.isFinite(num)) break;
+            handleLfoRateChangeLogic(instanceId, String(num));
+            setSlider('lfo-rate', timeToSlider(num, TIME_RANGES.lfoRate));
+            return;
+        case 'lfo-depth':
+            if (!Number.isFinite(num)) break;
+            handleLfoDepthChangeLogic(instanceId, String(Math.round(clamped(0, 100))));
+            setSlider('lfo-depth', Math.round(clamped(0, 100)));
+            return;
+    }
+
+    // Parse failed: restore the field from current settings
+    const inst = findInstance(instanceId);
+    if (!inst) return;
+    const s = inst.settings;
+    const restore = {
+        volume: () => `${s.volume.toFixed(1)} dB`,
+        pan: () => formatPan(s.pan ?? 0),
+        cutoff: () => formatCutoff(s.filter?.cutoff ?? 20000),
+        duration: () => formatSecs(s.noteDuration),
+        attack: () => formatSecs(s.envelope.attack),
+        decay: () => formatSecs(s.envelope.decay),
+        sustain: () => s.envelope.sustain.toFixed(2),
+        release: () => formatSecs(s.envelope.release),
+        'delay-time': () => `${s.delay.time.toFixed(2)}s`,
+        'delay-feedback': () => s.delay.feedback.toFixed(2),
+        'delay-wet': () => s.delay.wet.toFixed(2),
+        'reverb-size': () => (s.reverb.roomSize ?? 0.5).toFixed(2),
+        'reverb-wet': () => s.reverb.wet.toFixed(2),
+        'lfo-rate': () => `${s.lfo.rate >= 1 ? s.lfo.rate.toFixed(1) : s.lfo.rate.toFixed(2)} Hz`,
+        'lfo-depth': () => s.lfo.depth.toFixed(0),
+    }[ctrl];
+    if (restore) inputEl.value = restore();
+};
+
 // --- Tone.js Control Logic Functions ---
 
 const handleVolumeChangeLogic = (instanceId, valueStr, inputElement) => {
@@ -2345,7 +2511,7 @@ const handleVolumeChangeLogic = (instanceId, valueStr, inputElement) => {
     const value = parseFloat(valueStr);
     instance.settings.volume = value;
     const display = document.getElementById(`${instanceId}-volume-value`);
-    if (display) display.textContent = `${value.toFixed(1)} dB`;
+    if (display) display.value = `${value.toFixed(1)} dB`;
     // Update Tone object (only if not muted)
     if (!instance.settings.muted && instance.toneObjects?.synth?.volume) {
         instance.toneObjects.synth.volume.rampTo(value, 0.02); // Short ramp
@@ -2358,7 +2524,7 @@ const handlePanChangeLogic = (instanceId, valueStr) => {
     const pan = Math.max(-1, Math.min(1, parseInt(valueStr, 10) / 100));
     instance.settings.pan = pan;
     const display = document.getElementById(`${instanceId}-pan-value`);
-    if (display) display.textContent = formatPan(pan);
+    if (display) display.value = formatPan(pan);
     instance.toneObjects?.panner?.pan?.rampTo(pan, 0.02);
 };
 
@@ -2369,26 +2535,38 @@ const handleFilterCutoffChangeLogic = (instanceId, valueStr) => {
     if (!instance.settings.filter) instance.settings.filter = {};
     instance.settings.filter.cutoff = cutoff;
     const display = document.getElementById(`${instanceId}-filter-cutoff-value`);
-    if (display) display.textContent = formatCutoff(cutoff);
+    if (display) display.value = formatCutoff(cutoff);
     instance.toneObjects?.filter?.frequency?.rampTo(cutoff, 0.02);
 };
 
-const handleEnvelopeChangeLogic = (instanceId, param, valueStr, inputElement) => {
+// Takes REAL values (seconds for A/D/R, level 0-1 for S) — slider events
+// convert from log positions before calling. PolySynth has no .envelope,
+// so the live update goes through synth.set (applies to every voice); the
+// same click floors used at creation apply here.
+const handleEnvelopeChangeLogic = (instanceId, param, realValue) => {
     const instance = findInstance(instanceId);
     if (!instance || !param) return;
-    const value = parseFloat(valueStr);
+    let value = parseFloat(realValue);
+    if (!Number.isFinite(value)) return;
+    if (param === 'attack') value = Math.max(0.005, Math.min(10, value));
+    if (param === 'decay') value = Math.max(0.001, Math.min(10, value));
+    if (param === 'sustain') value = Math.max(0, Math.min(1, value));
+    if (param === 'release') value = Math.max(0.03, Math.min(10, value));
     instance.settings.envelope[param] = value;
-    // Update Tone object using set for envelope parameters
-    instance.toneObjects?.synth?.envelope?.set({ [param]: value });
+    const display = document.getElementById(`${instanceId}-${param}-value`);
+    if (display) display.value = param === 'sustain' ? value.toFixed(2) : formatSecs(value);
+    instance.toneObjects?.synth?.set({ envelope: { [param]: value } });
 };
 
-const handleNoteDurationChangeLogic = (instanceId, valueStr, inputElement) => {
+const handleNoteDurationChangeLogic = (instanceId, realSeconds) => {
     const instance = findInstance(instanceId);
     if (!instance) return;
-    const value = parseFloat(valueStr);
+    let value = parseFloat(realSeconds);
+    if (!Number.isFinite(value)) return;
+    value = Math.max(0.01, Math.min(20, value));
     instance.settings.noteDuration = value;
     const display = document.getElementById(`${instanceId}-note-duration-value`);
-    if (display) display.textContent = `${value.toFixed(2)}s`;
+    if (display) display.value = formatSecs(value);
     // NoteDuration is used in playTransactionSound, no direct Tone object update here
 };
 
@@ -2398,7 +2576,7 @@ const handleDelayTimeChangeLogic = (instanceId, valueStr, inputElement) => {
     const value = parseFloat(valueStr);
     instance.settings.delay.time = value;
     const display = document.getElementById(`${instanceId}-delay-time-value`);
-    if (display) display.textContent = `${value.toFixed(2)}s`;
+    if (display) display.value = `${value.toFixed(2)}s`;
     // Update Tone object
     instance.toneObjects?.delay?.delayTime?.rampTo(value, 0.02);
 };
@@ -2409,7 +2587,7 @@ const handleDelayFeedbackChangeLogic = (instanceId, valueStr, inputElement) => {
     const value = parseFloat(valueStr);
     instance.settings.delay.feedback = value;
     const display = document.getElementById(`${instanceId}-delay-feedback-value`);
-    if (display) display.textContent = value.toFixed(2);
+    if (display) display.value = value.toFixed(2);
     // Update Tone object
     instance.toneObjects?.delay?.feedback?.rampTo(value, 0.02);
 };
@@ -2420,7 +2598,7 @@ const handleDelayWetChangeLogic = (instanceId, valueStr, inputElement) => {
     const value = parseFloat(valueStr);
     instance.settings.delay.wet = value;
     const display = document.getElementById(`${instanceId}-delay-wet-value`);
-    if (display) display.textContent = value.toFixed(2);
+    if (display) display.value = value.toFixed(2);
     // Update Tone object
     instance.toneObjects?.delay?.wet?.rampTo(value, 0.02);
     if (instance.toneObjects) rewireFxChain(instance.toneObjects, instance.settings);
@@ -2434,7 +2612,7 @@ const handleReverbDecayChangeLogic = (instanceId, valueStr, inputElement) => {
     const roomSize = Math.max(0, Math.min(1, decaySeconds / 10));
     instance.settings.reverb.roomSize = roomSize;
     const display = document.getElementById(`${instanceId}-reverb-size-value`);
-    if (display) display.textContent = roomSize.toFixed(2);
+    if (display) display.value = roomSize.toFixed(2);
     updateSharedReverbRoomSize(roomSize); // room is global (shared bus)
 };
 
@@ -2444,7 +2622,7 @@ const handleReverbSizeChangeLogic = (instanceId, valueStr, inputElement) => {
     const value = Math.max(0, Math.min(1, parseFloat(valueStr)));
     instance.settings.reverb.roomSize = value;
     const display = document.getElementById(`${instanceId}-reverb-size-value`);
-    if (display) display.textContent = value.toFixed(2);
+    if (display) display.value = value.toFixed(2);
     updateSharedReverbRoomSize(value); // room is global (shared bus)
 };
 
@@ -2454,7 +2632,7 @@ const handleReverbWetChangeLogic = (instanceId, valueStr, inputElement) => {
     const value = parseFloat(valueStr);
     instance.settings.reverb.wet = value;
     const display = document.getElementById(`${instanceId}-reverb-wet-value`);
-    if (display) display.textContent = value.toFixed(2);
+    if (display) display.value = value.toFixed(2);
     // Wet = send amount into the shared reverb bus
     instance.toneObjects?.reverbSend?.gain?.rampTo(value, 0.02);
     if (instance.toneObjects) rewireFxChain(instance.toneObjects, instance.settings);
@@ -2718,10 +2896,12 @@ const injectSliderStyles = () => {
 const handleLfoRateChangeLogic = (instanceId, valueStr, inputElement) => {
     const instance = findInstance(instanceId);
     if (!instance) return;
-    const value = parseFloat(valueStr);
+    let value = parseFloat(valueStr);
+    if (!Number.isFinite(value)) return;
+    value = Math.max(0.01, Math.min(30, value));
     instance.settings.lfo.rate = value;
     const display = document.getElementById(`${instanceId}-lfo-rate-value`);
-    if (display) display.textContent = `${value.toFixed(1)} Hz`;
+    if (display) display.value = `${value >= 1 ? value.toFixed(1) : value.toFixed(2)} Hz`;
     // Update Tone object
     instance.toneObjects?.lfo?.set({ frequency: value });
     if (instance.settings.lfo.destination === 'pitch') {
@@ -2735,7 +2915,7 @@ const handleLfoDepthChangeLogic = (instanceId, valueStr, inputElement) => {
     const value = parseFloat(valueStr); // Depth is 0-100
     instance.settings.lfo.depth = value;
     const display = document.getElementById(`${instanceId}-lfo-depth-value`);
-    if (display) display.textContent = value.toFixed(0);
+    if (display) display.value = value.toFixed(0);
     // Reconnect LFO to apply new depth scaling and amplitude
     connectLFO(instance);
 };

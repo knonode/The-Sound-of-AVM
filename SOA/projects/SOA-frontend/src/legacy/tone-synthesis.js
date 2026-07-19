@@ -78,7 +78,7 @@ function connectLFO(instance) {
         return;
     }
 
-    const { lfo, synth, delay, vibrato } = instance.toneObjects;
+    const { lfo, synth, delay, vibrato, filter } = instance.toneObjects;
     const { destination, depth } = instance.settings.lfo;
     const { baseNote } = instance.settings; // Needed for pitch base freq
     const { volume: baseVolume } = instance.settings; // Needed for volume base level
@@ -92,6 +92,12 @@ function connectLFO(instance) {
          // Simply call disconnect - it's safe if not connected
          lfo.disconnect(synth.volume);
          lfo.disconnect(delay.delayTime);
+         if (instance.toneObjects._lfoCutoffGain) {
+             try { lfo.disconnect(instance.toneObjects._lfoCutoffGain); } catch { /* not connected */ }
+             instance.toneObjects._lfoCutoffGain.disconnect();
+             instance.toneObjects._lfoCutoffGain.dispose();
+             instance.toneObjects._lfoCutoffGain = null;
+         }
          // Bypass the vibrato stage; the pitch branch re-enables it
          vibrato?.set({ wet: 0 });
          //console.log(`LFO DEBUG (${instance.id}): Disconnect successful (or was not connected).`); // <<< MODIFIED LOG
@@ -141,12 +147,30 @@ function connectLFO(instance) {
                 lfo.min = baseVolume - scaledModulationAmount;
                 lfo.max = baseVolume + scaledModulationAmount;
                 break;
+            case 'cutoff': {
+                // Filter sweep — what turns a held drone into weather.
+                // Additive: LFO (+/-1) through a Hz-sized gain SUMS with the
+                // frequency param, so the base cutoff stays live under the
+                // modulation. (Large values in lfo.min/max corrupt Tone's
+                // internal scaler, hence this route.)
+                if (!filter) return;
+                const baseCutoff = instance.settings.filter?.cutoff ?? 20000;
+                const span = Math.pow(4, depth / 100); // 4x = 2 octaves at full depth
+                const modHz = baseCutoff * (1 - 1 / span); // swing reaches down to base/span
+                lfo.max = 1; // restore the +/-1 range in a safe order
+                lfo.min = -1;
+                const cutoffGain = new Tone.Gain(modHz);
+                lfo.connect(cutoffGain);
+                cutoffGain.connect(filter.frequency);
+                instance.toneObjects._lfoCutoffGain = cutoffGain;
+                return; // handled; skip the min/max target path
+            }
             case 'delayTime':
                 targetParam = delay.delayTime;
                 targetParamName = 'delay.delayTime';
                 // <<< SAFER DELAY TIME BOUNDS >>>
                 const safeMinDelay = Math.max(0.01, baseDelayTime * 0.1); // Never below 10ms, and not below 10% of base
-                const safeMaxDelay = Math.min(1.0, baseDelayTime * 3);     // Never above 1s, and not above 3x base
+                const safeMaxDelay = Math.min(4.0, baseDelayTime * 3);     // Never above the 4s delay line, and not above 3x base
                 lfo.min = Math.max(safeMinDelay, baseDelayTime - (scaledModulationAmount * 0.5)); // Reduce modulation amount
                 lfo.max = Math.min(safeMaxDelay, baseDelayTime + (scaledModulationAmount * 0.5)); // Reduce modulation amount
 
@@ -268,7 +292,8 @@ async function initializeToneForInstance(instance) {
         const delay = new Tone.FeedbackDelay({
             delayTime: settings.delay.time,
             feedback: settings.delay.feedback,
-            wet: settings.delay.wet
+            wet: settings.delay.wet,
+            maxDelay: 4 // delay-line length is fixed at construction; 4s = dub territory
         });
         // Send into the shared reverb bus; gain = the synth's reverb wet.
         // Room size is global — a preset's roomSize values apply last-wins.
@@ -412,6 +437,7 @@ function disposeSynth(instanceId, activeSynths) {
         instance.toneObjects.panner?.dispose();
         instance.toneObjects.delay?.dispose();
         instance.toneObjects.reverbSend?.dispose();
+        instance.toneObjects._lfoCutoffGain?.dispose();
         instance.toneObjects.meter?.dispose();
     } catch (error) {
         console.error(`Error disposing Tone.js objects for ${instanceId}:`, error);
