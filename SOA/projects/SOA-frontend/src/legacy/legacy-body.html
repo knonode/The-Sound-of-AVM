@@ -11,6 +11,13 @@
     </div>
 
     <div class="actions-bar">
+        <div class="viz-bar">
+            <button class="api-btn viz-btn" data-viz="score" title="The Score">Score</button>
+            <button class="api-btn viz-btn" data-viz="loom" title="The Loom">Loom</button>
+            <button class="api-btn viz-btn" disabled title="coming later">Joy Division</button>
+            <button class="api-btn viz-btn" disabled title="coming later">Tetris</button>
+            <button class="api-btn viz-btn" disabled title="coming later">Drop</button>
+        </div>
         <span id="stall-counter" title="Main-thread stalls over 50ms since load (temporary diagnostic)">stalls: 0</span>
         <span id="load-readout" title="Audio-thread load: average / peak per interval, plus total render underruns (actual missed deadlines = audible glitches)">load: --</span>
         <button id="toggle-aggr-btn" class="toggle-btn" disabled>Aggr Txs</button>
@@ -34,19 +41,12 @@
         <div id="persistent-block-count" class="persistent-count">Lifetime Blocks: 0</div>
     </div>
 
-    <!-- Visualizations: one at a time, selected in the bar -->
-    <div class="viz-bar">
-        <button class="api-btn viz-btn active" data-viz="score">The Score</button>
-        <button class="api-btn viz-btn" data-viz="loom">The Loom</button>
-        <button class="api-btn viz-btn" disabled title="coming later">Joy Division</button>
-        <button class="api-btn viz-btn" disabled title="coming later">Tetris</button>
-        <button class="api-btn viz-btn" disabled title="coming later">Drop</button>
-    </div>
-
-    <div class="status-container viz-container" id="viz-score">
+    <!-- Visualizations: fullscreen overlay, closed by default. Opened via
+         the viz-bar buttons in the actions-bar; click or Escape to close. -->
+    <div class="viz-container" id="viz-score" style="display: none;">
         <canvas id="xenakis-canvas" class="viz-canvas"></canvas>
     </div>
-    <div class="status-container viz-container" id="viz-loom" style="display: none;">
+    <div class="viz-container" id="viz-loom" style="display: none;">
         <canvas id="loom-canvas" class="viz-canvas"></canvas>
     </div>
 

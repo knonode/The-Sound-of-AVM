@@ -1690,15 +1690,45 @@ export async function bootLegacySynth() {
   initXenakisViz(document.getElementById('xenakis-canvas'));
   initLoomViz(document.getElementById('loom-canvas'));
 
-  // Visualization selector bar
+  // Visualization overlay: click a button to take over the screen; click
+  // the open viz (or its own button again), or press Escape, to leave.
+  let vizOverlayOpen = false;
+  const openViz = (target) => {
+      document.querySelectorAll('.viz-btn[data-viz]').forEach(b => b.classList.toggle('active', b.dataset.viz === target));
+      document.getElementById('viz-score').style.display = target === 'score' ? '' : 'none';
+      document.getElementById('viz-loom').style.display = target === 'loom' ? '' : 'none';
+      vizOverlayOpen = true;
+  };
+  const closeViz = () => {
+      if (!vizOverlayOpen) return;
+      document.querySelectorAll('.viz-btn[data-viz]').forEach(b => b.classList.remove('active'));
+      document.getElementById('viz-score').style.display = 'none';
+      document.getElementById('viz-loom').style.display = 'none';
+      vizOverlayOpen = false;
+  };
   document.querySelectorAll('.viz-btn[data-viz]').forEach(btn => {
       btn.addEventListener('click', () => {
-          document.querySelectorAll('.viz-btn[data-viz]').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          const target = btn.dataset.viz;
-          document.getElementById('viz-score').style.display = target === 'score' ? '' : 'none';
-          document.getElementById('viz-loom').style.display = target === 'loom' ? '' : 'none';
+          if (vizOverlayOpen && btn.classList.contains('active')) closeViz();
+          else openViz(btn.dataset.viz);
       });
+  });
+  document.getElementById('viz-score').addEventListener('click', closeViz);
+  document.getElementById('viz-loom').addEventListener('click', closeViz);
+
+  // Global keyboard conventions: Escape leaves the viz overlay, Space is
+  // play/stop everywhere else — the media-player convention (YouTube,
+  // Spotify). Skipped only in genuine text-entry contexts, since typing a
+  // literal space must still work; a focused button does NOT exempt it
+  // (Enter remains available for keyboard button activation).
+  document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeViz(); return; }
+      if (e.code !== 'Space') return;
+      const el = document.activeElement;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
+      e.preventDefault();
+      if (isPlaying) stopTransactionStream();
+      else startBtn.click(); // reuses the button's own audio-unlock + start logic
   });
 
   updateStatus('Ready');

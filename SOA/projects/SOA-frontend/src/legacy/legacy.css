@@ -185,6 +185,8 @@
         }
 
         .actions-bar {
+            position: relative; /* stays reachable above the fullscreen viz overlay */
+            z-index: 160; /* below the stpf overlay (200), above viz (150) */
             margin: 6px 0; /* Reduced from 10px 0 */
             display: flex;
             justify-content: flex-end;
@@ -206,17 +208,24 @@
         }
 
         .viz-bar {
-            margin-top: 10px;
             display: flex;
             gap: 3px;
-            flex-wrap: wrap;
+        }
+
+        /* Visualizations are a fullscreen overlay, not part of page flow —
+           click anywhere or press Escape to return to the controls. Sits
+           under the stpf overlay (z-index 200) so a state proof still wins. */
+        .viz-container {
+            position: fixed;
+            inset: 0;
+            z-index: 150;
+            cursor: pointer;
+            background: #04140f;
         }
         .viz-canvas {
             display: block;
             width: 100%;
-            /* as tall as a synth card: the viz owns the screen */
-            height: min(85vh, 880px);
-            border-radius: 4px;
+            height: 100%;
         }
 
         /* LED ladder meters */
