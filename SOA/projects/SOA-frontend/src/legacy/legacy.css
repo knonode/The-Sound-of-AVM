@@ -185,8 +185,6 @@
         }
 
         .actions-bar {
-            position: relative; /* stays reachable above the fullscreen viz overlay */
-            z-index: 160; /* below the stpf overlay (200), above viz (150) */
             margin: 6px 0; /* Reduced from 10px 0 */
             display: flex;
             justify-content: flex-end;
