@@ -136,12 +136,6 @@
             gap: 5px; /* Add gap between elements in a row (like ADSR inputs) */
         }
 
-        /* Target specifically rows with side-by-side labels for ADSR */
-         .adsr-section .control-row:nth-child(1) .control-label,
-         .adsr-section .control-row:nth-child(3) .control-label {
-             width: 50%; /* Make ADSR labels share space */
-         }
-
         .control-row input[type="range"] {
             width: 100%; /* Take full width within its container */
             height: 5px;
@@ -306,6 +300,25 @@
             border-color: #004d4d;
             outline: none;
         }
+        /* Synth engine picker: five choices, must fit one row on a narrow
+           card — tighter padding/font than the standard .api-btn. */
+        .engine-row, .tab-strip {
+            display: flex;
+            gap: 2px;
+        }
+        .engine-btn, .tab-btn {
+            flex: 1;
+            min-width: 0; /* flex items default to min-width:auto and refuse
+                              to shrink below content — 5 buttons on a narrow
+                              card overflow into the next card without this */
+            padding: 1px 2px;
+            font-size: 8px;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .adsr-row {
             display: flex;
             align-items: center;
@@ -316,8 +329,11 @@
             min-width: 0;
         }
         .adsr-label {
-            flex: 0 0 10px;
-            width: 10px;
+            /* wide enough for "Harm." — A/D/S/R just sit centered in the
+               extra space, still compact */
+            flex: 0 0 30px;
+            width: 30px;
+            font-size: 9px;
             cursor: help;
         }
         .value-input.adsr-num {

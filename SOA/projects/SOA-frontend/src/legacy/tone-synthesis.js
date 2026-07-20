@@ -267,6 +267,69 @@ function buildOscillatorOptions(oscillator) {
     return { type };
 }
 
+// One source of truth for voice construction, used both at first creation
+// and when an instance's engine is swapped live. Synth/MonoSynth are bare
+// (monophonic by nature — retriggering cuts the previous note); PolySynth/
+// AM/FM are wrapped for layered voices. Downstream (vibrato, filter, delay,
+// reverb send, panner, meter) is engine-agnostic and never touches this.
+function createVoice(engine, settings) {
+    const env = settings.envelope || {};
+    // Envelope floor: an attack/release at (or near) zero is a waveform
+    // discontinuity — audible as a click at any volume.
+    const envelope = {
+        ...env,
+        attack: Math.max(0.005, env.attack ?? 0.005),
+        release: Math.max(0.03, env.release ?? 0.03)
+    };
+    const oscillator = buildOscillatorOptions(settings.oscillator);
+    const detune = settings.detune ?? 0;
+
+    let synth;
+    switch (engine) {
+        case 'synth':
+            synth = new Tone.Synth({ oscillator, envelope });
+            break;
+        case 'monosynth': {
+            const fenv = settings.filterEnvelope || {};
+            synth = new Tone.MonoSynth({
+                oscillator,
+                envelope,
+                filterEnvelope: {
+                    attack: fenv.attack ?? 0.6,
+                    decay: fenv.decay ?? 0.2,
+                    sustain: fenv.sustain ?? 0.5,
+                    release: fenv.release ?? 2
+                }
+            });
+            break;
+        }
+        case 'am':
+            synth = new Tone.PolySynth(Tone.AMSynth, {
+                oscillator, envelope, harmonicity: settings.harmonicity ?? 3
+            });
+            synth.maxPolyphony = 12;
+            break;
+        case 'fm':
+            synth = new Tone.PolySynth(Tone.FMSynth, {
+                oscillator, envelope,
+                harmonicity: settings.harmonicity ?? 3,
+                modulationIndex: settings.modulationIndex ?? 10
+            });
+            synth.maxPolyphony = 12;
+            break;
+        case 'polysynth':
+        default:
+            synth = new Tone.PolySynth(Tone.Synth, { oscillator, envelope });
+            synth.maxPolyphony = 12;
+            break;
+    }
+    // detune isn't part of the constructor options' TS shape on any engine
+    // (it's a runtime Signal instead) — set it the same way PolySynth's own
+    // docs do, post-construction.
+    synth.set({ detune });
+    return synth;
+}
+
 // Create Tone.js objects for a single synth instance
 async function initializeToneForInstance(instance) {
     // The master card is a mixer strip, not an instrument: its audio is the
@@ -306,21 +369,7 @@ async function initializeToneForInstance(instance) {
             updateSharedReverbRoomSize(desiredRoomSize);
         }
 
-        // Polyphonic voice: overlapping transactions layer instead of
-        // cutting each other off.
-        // Envelope floor: an attack/release at (or near) zero is a waveform
-        // discontinuity — audible as a click at any volume. 5ms/30ms ramps
-        // are below the threshold of sounding "softer" but remove the click.
-        const env = settings.envelope || {};
-        const synth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: buildOscillatorOptions(settings.oscillator),
-            envelope: {
-                ...env,
-                attack: Math.max(0.005, env.attack ?? 0.005),
-                release: Math.max(0.03, env.release ?? 0.03)
-            }
-        });
-        synth.maxPolyphony = 12;
+        const synth = createVoice(settings.engine ?? 'polysynth', settings);
         synth.volume.value = settings.muted ? -Infinity : settings.volume;
 
         // Pitch LFO stage (PolySynth has no per-voice frequency param, so
@@ -375,6 +424,27 @@ async function initializeToneForInstance(instance) {
         console.error(`Failed to initialize Tone.js objects for instance ${instance.id}:`, error);
         instance.toneObjects = null;
     }
+}
+
+// Swap just the voice (engine change) without tearing down the rest of the
+// chain — vibrato/filter/delay/reverb send/panner/meter/LFO routing all
+// stay exactly as they were.
+async function rebuildVoice(instance) {
+    if (!instance || instance.id === 'master') return;
+    if (!instance.toneObjects) {
+        await initializeToneForInstance(instance);
+        return;
+    }
+    const settings = instance.settings;
+    const old = instance.toneObjects.synth;
+    try { old?.disconnect(); } catch { /* already disconnected */ }
+    old?.dispose();
+
+    const synth = createVoice(settings.engine ?? 'polysynth', settings);
+    synth.volume.value = settings.muted ? -Infinity : settings.volume;
+    synth.connect(instance.toneObjects.vibrato);
+    instance.toneObjects.synth = synth;
+    instance.toneObjects._lastTriggerTime = undefined; // fresh voice, fresh monotonic guard
 }
 
 // Wire filter -> [delay] -> panner, plus a post-pan send into the shared
@@ -621,6 +691,7 @@ export {
     scaleLfoDepth,
     rewireFxChain,
     updateSharedReverbRoomSize,
+    rebuildVoice,
     unlockIOSAudioOnce
 };
 

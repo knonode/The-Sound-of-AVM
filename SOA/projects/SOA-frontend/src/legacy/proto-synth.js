@@ -32,6 +32,7 @@ import {
     scaleLfoDepth,
     rewireFxChain,
     updateSharedReverbRoomSize,
+    rebuildVoice,
     synthsInitialized,
     isMasterMuted,
     masterVolumeBeforeMute,
@@ -283,8 +284,13 @@ function formatSecs(t) {
 
 function getDefaultInstanceSettings() {
     return {
+        engine: 'polysynth', // 'synth' | 'monosynth' | 'polysynth' | 'am' | 'fm'
         oscillator: { type: 'sine' },
         envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.2 },
+        detune: 0,
+        harmonicity: 3, // am, fm
+        modulationIndex: 10, // fm only
+        filterEnvelope: { attack: 0.6, decay: 0.2, sustain: 0.5, release: 2 }, // monosynth only
         volume: -8,
         pan: 0,
         muted: false,
@@ -394,6 +400,119 @@ const svgIconMuted = `<svg viewBox="0 0 24 24" fill="currentColor" width="1em" h
   <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
 </svg>`;
 
+const ENGINE_LABELS = {
+    synth: { label: 'Synth', title: 'Synth: oscillator + amp envelope, single voice (retriggers cut off)' },
+    monosynth: { label: 'Mono', title: 'MonoSynth: single voice with its own filter + filter envelope' },
+    polysynth: { label: 'Poly', title: 'PolySynth: layered voices (default)' },
+    am: { label: 'AM', title: 'AM: amplitude-modulated layered voices' },
+    fm: { label: 'FM', title: 'FM: frequency-modulated layered voices' }
+};
+
+function renderEngineSection(uniqueId, settings) {
+    const engine = settings.engine ?? 'polysynth';
+    const buttons = Object.entries(ENGINE_LABELS).map(([key, { label, title }]) => `
+        <button class="api-btn engine-btn ${engine === key ? 'active' : ''}" data-engine="${key}" data-instance-id="${uniqueId}" title="${title}">${label}</button>
+    `).join('');
+    return `
+        <div class="engine-section">
+            <div class="control-row engine-row">${buttons}</div>
+        </div>
+    `;
+}
+
+// Tab 1 (ADSR) is universal. Tab 2 holds whatever the chosen engine adds on
+// top — Detune always (every Tone instrument has it), Harmonicity for
+// AM/FM, Modulation Index for FM only. MonoSynth gets a third tab for its
+// own filter envelope (brightness over time, independent from loudness).
+// Only one tab's content is visible at a time, so this never grows past
+// the two new rows (engine picker + tab strip) the card already budgets.
+function renderAdsrSection(uniqueId, settings, activeTabIn) {
+    const engine = settings.engine ?? 'polysynth';
+    const hasFilterEnv = engine === 'monosynth';
+    const activeTab = activeTabIn || 'adsr';
+    const tab2Label = engine === 'am' ? 'AM' : engine === 'fm' ? 'FM' : 'Detune';
+
+    const adsrRows = `
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Attack: seconds to reach full level (0.001-10)">A</span>
+            <input type="range" id="${uniqueId}-attack" min="0" max="100" step="1" value="${timeToSlider(settings.envelope.attack, TIME_RANGES.attack)}" data-instance-id="${uniqueId}" data-param="attack">
+            <input class="value-input adsr-num" id="${uniqueId}-attack-value" value="${formatSecs(settings.envelope.attack)}" data-instance-id="${uniqueId}" data-vctrl="attack" title="Attack in seconds — type a value">
+        </div>
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Decay: seconds from peak down to sustain level (0.001-10)">D</span>
+            <input type="range" id="${uniqueId}-decay" min="0" max="100" step="1" value="${timeToSlider(settings.envelope.decay, TIME_RANGES.decay)}" data-instance-id="${uniqueId}" data-param="decay">
+            <input class="value-input adsr-num" id="${uniqueId}-decay-value" value="${formatSecs(settings.envelope.decay)}" data-instance-id="${uniqueId}" data-vctrl="decay" title="Decay in seconds — type a value">
+        </div>
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Sustain: held level while the note lasts (0-1)">S</span>
+            <input type="range" id="${uniqueId}-sustain" min="0" max="1" step="0.01" value="${settings.envelope.sustain}" data-instance-id="${uniqueId}" data-param="sustain">
+            <input class="value-input adsr-num" id="${uniqueId}-sustain-value" value="${settings.envelope.sustain.toFixed(2)}" data-instance-id="${uniqueId}" data-vctrl="sustain" title="Sustain level 0-1 — type a value">
+        </div>
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Release: seconds to fade after the note ends (0.005-10)">R</span>
+            <input type="range" id="${uniqueId}-release" min="0" max="100" step="1" value="${timeToSlider(settings.envelope.release, TIME_RANGES.release)}" data-instance-id="${uniqueId}" data-param="release">
+            <input class="value-input adsr-num" id="${uniqueId}-release-value" value="${formatSecs(settings.envelope.release)}" data-instance-id="${uniqueId}" data-vctrl="release" title="Release in seconds — type a value">
+        </div>
+    `;
+
+    const extrasRows = `
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Detune in cents (+/-1200 = +/-1 octave) — fine tuning beneath the semitone grid, not a replacement for base note/sequence">Det.</span>
+            <input type="range" id="${uniqueId}-detune" min="-1200" max="1200" step="1" value="${settings.detune ?? 0}" data-instance-id="${uniqueId}">
+            <input class="value-input adsr-num" id="${uniqueId}-detune-value" value="${(settings.detune ?? 0).toFixed(0)}" data-instance-id="${uniqueId}" data-vctrl="detune" title="Detune in cents — type a value">
+        </div>
+        ${(engine === 'am' || engine === 'fm') ? `
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Harmonicity: ratio between carrier and modulator (1 = unison, 2 = an octave up)">Harm.</span>
+            <input type="range" id="${uniqueId}-harmonicity" min="0.1" max="8" step="0.1" value="${settings.harmonicity ?? 3}" data-instance-id="${uniqueId}">
+            <input class="value-input adsr-num" id="${uniqueId}-harmonicity-value" value="${(settings.harmonicity ?? 3).toFixed(1)}" data-instance-id="${uniqueId}" data-vctrl="harmonicity" title="Harmonicity ratio — type a value">
+        </div>` : ''}
+        ${engine === 'fm' ? `
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Modulation index: how strongly the modulator bends the carrier — low is gentle, high gets harsh/metallic">Mod.</span>
+            <input type="range" id="${uniqueId}-modindex" min="0" max="100" step="1" value="${settings.modulationIndex ?? 10}" data-instance-id="${uniqueId}">
+            <input class="value-input adsr-num" id="${uniqueId}-modindex-value" value="${(settings.modulationIndex ?? 10).toFixed(0)}" data-instance-id="${uniqueId}" data-vctrl="modindex" title="Modulation index — type a value">
+        </div>` : ''}
+    `;
+
+    const fenv = settings.filterEnvelope || {};
+    const filterEnvRows = hasFilterEnv ? `
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Filter envelope attack: seconds to reach full brightness (0.001-10)">A</span>
+            <input type="range" id="${uniqueId}-fenv-attack" min="0" max="100" step="1" value="${timeToSlider(fenv.attack ?? 0.6, TIME_RANGES.attack)}" data-instance-id="${uniqueId}">
+            <input class="value-input adsr-num" id="${uniqueId}-fenv-attack-value" value="${formatSecs(fenv.attack ?? 0.6)}" data-instance-id="${uniqueId}" data-vctrl="fenv-attack" title="Filter envelope attack in seconds — type a value">
+        </div>
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Filter envelope decay: seconds falling to the sustain brightness (0.001-10)">D</span>
+            <input type="range" id="${uniqueId}-fenv-decay" min="0" max="100" step="1" value="${timeToSlider(fenv.decay ?? 0.2, TIME_RANGES.decay)}" data-instance-id="${uniqueId}">
+            <input class="value-input adsr-num" id="${uniqueId}-fenv-decay-value" value="${formatSecs(fenv.decay ?? 0.2)}" data-instance-id="${uniqueId}" data-vctrl="fenv-decay" title="Filter envelope decay in seconds — type a value">
+        </div>
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Filter envelope sustain: held brightness while the note lasts (0-1)">S</span>
+            <input type="range" id="${uniqueId}-fenv-sustain" min="0" max="1" step="0.01" value="${fenv.sustain ?? 0.5}" data-instance-id="${uniqueId}">
+            <input class="value-input adsr-num" id="${uniqueId}-fenv-sustain-value" value="${(fenv.sustain ?? 0.5).toFixed(2)}" data-instance-id="${uniqueId}" data-vctrl="fenv-sustain" title="Filter envelope sustain 0-1 — type a value">
+        </div>
+        <div class="control-row adsr-row">
+            <span class="control-label adsr-label" title="Filter envelope release: seconds fading back to dark after the note ends (0.005-10)">R</span>
+            <input type="range" id="${uniqueId}-fenv-release" min="0" max="100" step="1" value="${timeToSlider(fenv.release ?? 2, TIME_RANGES.release)}" data-instance-id="${uniqueId}">
+            <input class="value-input adsr-num" id="${uniqueId}-fenv-release-value" value="${formatSecs(fenv.release ?? 2)}" data-instance-id="${uniqueId}" data-vctrl="fenv-release" title="Filter envelope release in seconds — type a value">
+        </div>
+    ` : '';
+
+    return `
+        <div class="adsr-section">
+            <div class="control-row tab-strip">
+                <button class="api-btn tab-btn ${activeTab === 'adsr' ? 'active' : ''}" data-tab="adsr" data-instance-id="${uniqueId}">ADSR</button>
+                <button class="api-btn tab-btn ${activeTab === 'extras' ? 'active' : ''}" data-tab="extras" data-instance-id="${uniqueId}">${tab2Label}</button>
+                ${hasFilterEnv ? `<button class="api-btn tab-btn ${activeTab === 'filterenv' ? 'active' : ''}" data-tab="filterenv" data-instance-id="${uniqueId}">Filter Env</button>` : ''}
+            </div>
+            <div class="synth-tab-content" data-tab-content="adsr" style="${activeTab === 'adsr' ? '' : 'display:none'}">${adsrRows}</div>
+            <div class="synth-tab-content" data-tab-content="extras" style="${activeTab === 'extras' ? '' : 'display:none'}">${extrasRows}</div>
+            ${hasFilterEnv ? `<div class="synth-tab-content" data-tab-content="filterenv" style="${activeTab === 'filterenv' ? '' : 'display:none'}">${filterEnvRows}</div>` : ''}
+        </div>
+    `;
+}
+
 const createSynthHTML = (synthInstance) => {
     const settings = { ...getDefaultInstanceSettings(), ...(synthInstance.settings || {}) };
     const config = synthInstance.config || { type: null, subtype: null, parameters: {} };
@@ -435,6 +554,8 @@ const createSynthHTML = (synthInstance) => {
 
     // --- Generate Tone.js Controls HTML ---
     const controlsHTML = `
+        ${renderEngineSection(uniqueId, settings)}
+
         <!-- Volume Section -->
         <div class="volume-section">
             <div class="control-row">
@@ -481,29 +602,7 @@ const createSynthHTML = (synthInstance) => {
             </div>
         </div>
 
-        <!-- ADSR Section -->
-        <div class="adsr-section">
-            <div class="control-row adsr-row">
-                <span class="control-label adsr-label" title="Attack: seconds to reach full level (0.001-10)">A</span>
-                <input type="range" id="${uniqueId}-attack" min="0" max="100" step="1" value="${timeToSlider(settings.envelope.attack, TIME_RANGES.attack)}" data-instance-id="${uniqueId}" data-param="attack">
-                <input class="value-input adsr-num" id="${uniqueId}-attack-value" value="${formatSecs(settings.envelope.attack)}" data-instance-id="${uniqueId}" data-vctrl="attack" title="Attack in seconds — type a value">
-            </div>
-            <div class="control-row adsr-row">
-                <span class="control-label adsr-label" title="Decay: seconds from peak down to sustain level (0.001-10)">D</span>
-                <input type="range" id="${uniqueId}-decay" min="0" max="100" step="1" value="${timeToSlider(settings.envelope.decay, TIME_RANGES.decay)}" data-instance-id="${uniqueId}" data-param="decay">
-                <input class="value-input adsr-num" id="${uniqueId}-decay-value" value="${formatSecs(settings.envelope.decay)}" data-instance-id="${uniqueId}" data-vctrl="decay" title="Decay in seconds — type a value">
-            </div>
-            <div class="control-row adsr-row">
-                <span class="control-label adsr-label" title="Sustain: held level while the note lasts (0-1)">S</span>
-                <input type="range" id="${uniqueId}-sustain" min="0" max="1" step="0.01" value="${settings.envelope.sustain}" data-instance-id="${uniqueId}" data-param="sustain">
-                <input class="value-input adsr-num" id="${uniqueId}-sustain-value" value="${settings.envelope.sustain.toFixed(2)}" data-instance-id="${uniqueId}" data-vctrl="sustain" title="Sustain level 0-1 — type a value">
-            </div>
-            <div class="control-row adsr-row">
-                <span class="control-label adsr-label" title="Release: seconds to fade after the note ends (0.005-10)">R</span>
-                <input type="range" id="${uniqueId}-release" min="0" max="100" step="1" value="${timeToSlider(settings.envelope.release, TIME_RANGES.release)}" data-instance-id="${uniqueId}" data-param="release">
-                <input class="value-input adsr-num" id="${uniqueId}-release-value" value="${formatSecs(settings.envelope.release)}" data-instance-id="${uniqueId}" data-vctrl="release" title="Release in seconds — type a value">
-            </div>
-        </div>
+        ${renderAdsrSection(uniqueId, settings, synthInstance._activeTab)}
 
         <!-- Waveform Section -->
         <div class="waveform-section">
@@ -2037,6 +2136,32 @@ async function testFireSynth(instanceId) {
     if (instance.toneObjects) playTransactionSoundWithUI(instance, 0);
 }
 
+// Switch which tab-content of the ADSR/extras section is visible. Purely
+// a UI preference — stored on the instance itself, not settings, so it
+// never leaks into saved presets (writePreset only copies id/config/settings).
+function handleTabChangeLogic(instanceId, tab, synthElement) {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    instance._activeTab = tab;
+    const adsrSection = synthElement.querySelector('.adsr-section');
+    if (adsrSection) adsrSection.outerHTML = renderAdsrSection(instanceId, instance.settings, tab);
+}
+
+// Swap the voice's engine (Synth/MonoSynth/PolySynth/AM/FM). Rebuilds only
+// the voice — vibrato/filter/delay/reverb send/panner/meter are untouched
+// — and re-renders the ADSR section since the available tabs depend on
+// which engine is selected.
+async function handleEngineChangeLogic(instanceId, engine, synthElement) {
+    const instance = findInstance(instanceId);
+    if (!instance || instance.settings.engine === engine) return;
+    instance.settings.engine = engine;
+    instance._activeTab = 'adsr'; // reset to a tab that always exists
+    synthElement.querySelectorAll('.engine-btn').forEach(b => b.classList.toggle('active', b.dataset.engine === engine));
+    const adsrSection = synthElement.querySelector('.adsr-section');
+    if (adsrSection) adsrSection.outerHTML = renderAdsrSection(instanceId, instance.settings, 'adsr');
+    await rebuildVoice(instance);
+}
+
 const handleContainerClick = (e) => {
     const target = e.target;
     // Find the closest parent synth element to get the instance ID
@@ -2048,6 +2173,10 @@ const handleContainerClick = (e) => {
     // Determine which control was clicked and call the appropriate logic function
     if (target.matches('.led')) {
         testFireSynth(instanceId); // audition without waiting for a matching tx
+    } else if (target.matches('.engine-btn')) {
+        handleEngineChangeLogic(instanceId, target.dataset.engine, synthElement);
+    } else if (target.matches('.tab-btn')) {
+        handleTabChangeLogic(instanceId, target.dataset.tab, synthElement);
     } else if (target.matches('.mute-btn') || target.closest('.mute-btn')) { // Handle clicks on SVG inside button
         handleMuteLogic(instanceId, synthElement.querySelector('.mute-btn')); // Pass button itself
     } else if (target.matches('.close-btn')) {
@@ -2172,6 +2301,26 @@ const handleContainerInput = (e) => {
                  handleReverbDecayChangeLogic(instanceId, target.value, target);
              }
              break;
+        case 'detune':
+            handleDetuneChangeLogic(instanceId, target.value);
+            break;
+        case 'harmonicity':
+            handleHarmonicityChangeLogic(instanceId, target.value);
+            break;
+        case 'modindex':
+            handleModulationIndexChangeLogic(instanceId, target.value);
+            break;
+        case 'fenv-attack':
+        case 'fenv-decay':
+        case 'fenv-sustain':
+        case 'fenv-release': {
+            const fp = controlIdentifier.replace('fenv-', '');
+            const freal = fp === 'sustain'
+                ? target.value
+                : sliderToTime(parseFloat(target.value), TIME_RANGES[fp]);
+            handleFilterEnvelopeChangeLogic(instanceId, fp, freal);
+            break;
+        }
         case 'note-duration': // Changed from 'duration' to match ID
              handleNoteDurationChangeLogic(instanceId, sliderToTime(parseFloat(target.value), TIME_RANGES.duration));
              break;
@@ -2507,6 +2656,35 @@ const handleTypedValue = (instanceId, inputEl) => {
             handleLfoDepthChangeLogic(instanceId, String(Math.round(clamped(0, 100))));
             setSlider('lfo-depth', Math.round(clamped(0, 100)));
             return;
+        case 'detune':
+            if (!Number.isFinite(num)) break;
+            handleDetuneChangeLogic(instanceId, String(clamped(-1200, 1200)));
+            setSlider('detune', clamped(-1200, 1200));
+            return;
+        case 'harmonicity':
+            if (!Number.isFinite(num)) break;
+            handleHarmonicityChangeLogic(instanceId, String(clamped(0.1, 8)));
+            setSlider('harmonicity', clamped(0.1, 8));
+            return;
+        case 'modindex':
+            if (!Number.isFinite(num)) break;
+            handleModulationIndexChangeLogic(instanceId, String(clamped(0, 100)));
+            setSlider('modindex', clamped(0, 100));
+            return;
+        case 'fenv-attack':
+        case 'fenv-decay':
+        case 'fenv-release': {
+            if (!Number.isFinite(num)) break;
+            const fp = ctrl.replace('fenv-', '');
+            handleFilterEnvelopeChangeLogic(instanceId, fp, num);
+            setSlider(`fenv-${fp}`, timeToSlider(num, TIME_RANGES[fp]));
+            return;
+        }
+        case 'fenv-sustain':
+            if (!Number.isFinite(num)) break;
+            handleFilterEnvelopeChangeLogic(instanceId, 'sustain', num);
+            setSlider('fenv-sustain', clamped(0, 1));
+            return;
     }
 
     // Parse failed: restore the field from current settings
@@ -2529,6 +2707,13 @@ const handleTypedValue = (instanceId, inputEl) => {
         'reverb-wet': () => s.reverb.wet.toFixed(2),
         'lfo-rate': () => `${s.lfo.rate >= 1 ? s.lfo.rate.toFixed(1) : s.lfo.rate.toFixed(2)} Hz`,
         'lfo-depth': () => s.lfo.depth.toFixed(0),
+        detune: () => (s.detune ?? 0).toFixed(0),
+        harmonicity: () => (s.harmonicity ?? 3).toFixed(1),
+        modindex: () => (s.modulationIndex ?? 10).toFixed(0),
+        'fenv-attack': () => formatSecs(s.filterEnvelope?.attack ?? 0.6),
+        'fenv-decay': () => formatSecs(s.filterEnvelope?.decay ?? 0.2),
+        'fenv-sustain': () => (s.filterEnvelope?.sustain ?? 0.5).toFixed(2),
+        'fenv-release': () => formatSecs(s.filterEnvelope?.release ?? 2),
     }[ctrl];
     if (restore) inputEl.value = restore();
 };
@@ -2598,6 +2783,64 @@ const handleNoteDurationChangeLogic = (instanceId, realSeconds) => {
     const display = document.getElementById(`${instanceId}-note-duration-value`);
     if (display) display.value = formatSecs(value);
     // NoteDuration is used in playTransactionSound, no direct Tone object update here
+};
+
+// Detune is universal — every Tone engine has it — so this handler is
+// engine-agnostic. It isn't a constructor option on any engine's type
+// (it's a runtime Signal instead), so it's applied via .set() same as
+// PolySynth's own docs show.
+const handleDetuneChangeLogic = (instanceId, valueStr) => {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    let value = parseFloat(valueStr);
+    if (!Number.isFinite(value)) return;
+    value = Math.max(-1200, Math.min(1200, value));
+    instance.settings.detune = value;
+    const display = document.getElementById(`${instanceId}-detune-value`);
+    if (display) display.value = value.toFixed(0);
+    instance.toneObjects?.synth?.set({ detune: value });
+};
+
+const handleHarmonicityChangeLogic = (instanceId, valueStr) => {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    let value = parseFloat(valueStr);
+    if (!Number.isFinite(value)) return;
+    value = Math.max(0.1, Math.min(8, value));
+    instance.settings.harmonicity = value;
+    const display = document.getElementById(`${instanceId}-harmonicity-value`);
+    if (display) display.value = value.toFixed(1);
+    instance.toneObjects?.synth?.set({ harmonicity: value });
+};
+
+const handleModulationIndexChangeLogic = (instanceId, valueStr) => {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    let value = parseFloat(valueStr);
+    if (!Number.isFinite(value)) return;
+    value = Math.max(0, Math.min(100, value));
+    instance.settings.modulationIndex = value;
+    const display = document.getElementById(`${instanceId}-modindex-value`);
+    if (display) display.value = value.toFixed(0);
+    instance.toneObjects?.synth?.set({ modulationIndex: value });
+};
+
+// MonoSynth's own filter envelope — same ADSR shape as the amp envelope,
+// aimed at brightness instead of loudness.
+const handleFilterEnvelopeChangeLogic = (instanceId, param, realValue) => {
+    const instance = findInstance(instanceId);
+    if (!instance || !param) return;
+    let value = parseFloat(realValue);
+    if (!Number.isFinite(value)) return;
+    if (param === 'attack') value = Math.max(0.001, Math.min(10, value));
+    if (param === 'decay') value = Math.max(0.001, Math.min(10, value));
+    if (param === 'sustain') value = Math.max(0, Math.min(1, value));
+    if (param === 'release') value = Math.max(0.005, Math.min(10, value));
+    if (!instance.settings.filterEnvelope) instance.settings.filterEnvelope = {};
+    instance.settings.filterEnvelope[param] = value;
+    const display = document.getElementById(`${instanceId}-fenv-${param}-value`);
+    if (display) display.value = param === 'sustain' ? value.toFixed(2) : formatSecs(value);
+    instance.toneObjects?.synth?.set({ filterEnvelope: { [param]: value } });
 };
 
 const handleDelayTimeChangeLogic = (instanceId, valueStr, inputElement) => {
