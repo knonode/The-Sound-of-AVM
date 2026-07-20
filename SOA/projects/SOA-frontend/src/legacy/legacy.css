@@ -302,6 +302,9 @@
         }
         /* Synth engine picker: five choices, must fit one row on a narrow
            card — tighter padding/font than the standard .api-btn. */
+        .engine-section {
+            margin-top: 6px; /* breathing room from .parameter-area above */
+        }
         .engine-row, .tab-strip {
             display: flex;
             gap: 2px;
@@ -311,12 +314,55 @@
             min-width: 0; /* flex items default to min-width:auto and refuse
                               to shrink below content — 5 buttons on a narrow
                               card overflow into the next card without this */
-            padding: 1px 2px;
-            font-size: 8px;
+            padding: 1px 2px; /* same footprint as .type-select/.subtype-select */
+            font-size: 10px;
             text-align: center;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            overflow: hidden; /* clip, no ellipsis — cut letters read better than dots */
             white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        /* Engine picker: flat text buttons, no background — reads as a
+           row of labels, not a bank of buttons. Active = brighter text
+           + a thin underline instead of a fill. */
+        .engine-btn {
+            text-transform: lowercase;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.55);
+            border: none;
+            border-bottom: 2px solid transparent;
+        }
+        .engine-btn:hover {
+            color: rgba(255, 255, 255, 0.85);
+            background: transparent;
+        }
+        .engine-btn.active {
+            color: #fff;
+            border-bottom-color: #00cccc;
+        }
+
+        /* Tabs: an actual tab look — the active tab merges into the panel
+           below (same fill, no seam); inactive tabs sit dimmer behind it. */
+        .tab-strip {
+            border-bottom: 1px solid #004d4d;
+        }
+        .tab-btn {
+            background-color: #002626;
+            color: rgba(255, 255, 255, 0.7);
+            border: 1px solid #004d4d;
+            border-bottom: none;
+            border-radius: 3px 3px 0 0;
+        }
+        .tab-btn.active {
+            background-color: #004d4d;
+            color: #fff;
+            border-color: #006666;
+        }
+        .synth-tab-content {
+            background-color: #004d4d;
+            padding: 3px 2px 0;
+            border-radius: 0 0 4px 4px;
         }
 
         .adsr-row {

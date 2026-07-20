@@ -411,7 +411,7 @@ const ENGINE_LABELS = {
 function renderEngineSection(uniqueId, settings) {
     const engine = settings.engine ?? 'polysynth';
     const buttons = Object.entries(ENGINE_LABELS).map(([key, { label, title }]) => `
-        <button class="api-btn engine-btn ${engine === key ? 'active' : ''}" data-engine="${key}" data-instance-id="${uniqueId}" title="${title}">${label}</button>
+        <button class="engine-btn ${engine === key ? 'active' : ''}" data-engine="${key}" data-instance-id="${uniqueId}" title="${title}">${label}</button>
     `).join('');
     return `
         <div class="engine-section">
@@ -502,9 +502,9 @@ function renderAdsrSection(uniqueId, settings, activeTabIn) {
     return `
         <div class="adsr-section">
             <div class="control-row tab-strip">
-                <button class="api-btn tab-btn ${activeTab === 'adsr' ? 'active' : ''}" data-tab="adsr" data-instance-id="${uniqueId}">ADSR</button>
-                <button class="api-btn tab-btn ${activeTab === 'extras' ? 'active' : ''}" data-tab="extras" data-instance-id="${uniqueId}">${tab2Label}</button>
-                ${hasFilterEnv ? `<button class="api-btn tab-btn ${activeTab === 'filterenv' ? 'active' : ''}" data-tab="filterenv" data-instance-id="${uniqueId}">Filter Env</button>` : ''}
+                <button class="tab-btn ${activeTab === 'adsr' ? 'active' : ''}" data-tab="adsr" data-instance-id="${uniqueId}">ADSR</button>
+                <button class="tab-btn ${activeTab === 'extras' ? 'active' : ''}" data-tab="extras" data-instance-id="${uniqueId}">${tab2Label}</button>
+                ${hasFilterEnv ? `<button class="tab-btn ${activeTab === 'filterenv' ? 'active' : ''}" data-tab="filterenv" data-instance-id="${uniqueId}">Filter Env</button>` : ''}
             </div>
             <div class="synth-tab-content" data-tab-content="adsr" style="${activeTab === 'adsr' ? '' : 'display:none'}">${adsrRows}</div>
             <div class="synth-tab-content" data-tab-content="extras" style="${activeTab === 'extras' ? '' : 'display:none'}">${extrasRows}</div>
