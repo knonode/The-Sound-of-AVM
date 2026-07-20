@@ -455,10 +455,17 @@ function renderAdsrSection(uniqueId, settings, activeTabIn) {
         </div>
     `;
 
+    // Detune is the only control on this tab for synth/monosynth/polysynth
+    // — the tab title "Detune" already says what it is, so the row label
+    // is dropped there (its explanation moves to the slider's tooltip).
+    // AM/FM share the tab with other params, so the label stays to tell
+    // the rows apart.
+    const soloDetune = !(engine === 'am' || engine === 'fm');
+    const detuneTitle = 'Detune in cents (+/-1200 = +/-1 octave) — fine tuning beneath the semitone grid, not a replacement for base note/sequence';
     const extrasRows = `
         <div class="control-row adsr-row">
-            <span class="control-label adsr-label" title="Detune in cents (+/-1200 = +/-1 octave) — fine tuning beneath the semitone grid, not a replacement for base note/sequence">Det.</span>
-            <input type="range" id="${uniqueId}-detune" min="-1200" max="1200" step="1" value="${settings.detune ?? 0}" data-instance-id="${uniqueId}">
+            ${soloDetune ? '' : `<span class="control-label adsr-label" title="${detuneTitle}">Det.</span>`}
+            <input type="range" id="${uniqueId}-detune" min="-1200" max="1200" step="1" value="${settings.detune ?? 0}" data-instance-id="${uniqueId}" title="${soloDetune ? detuneTitle : ''}">
             <input class="value-input adsr-num" id="${uniqueId}-detune-value" value="${(settings.detune ?? 0).toFixed(0)}" data-instance-id="${uniqueId}" data-vctrl="detune" title="Detune in cents — type a value">
         </div>
         ${(engine === 'am' || engine === 'fm') ? `

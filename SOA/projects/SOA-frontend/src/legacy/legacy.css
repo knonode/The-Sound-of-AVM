@@ -366,10 +366,14 @@
             min-width: 0;
         }
         .adsr-label {
-            /* wide enough for "Harm." — A/D/S/R just sit centered in the
-               extra space, still compact */
-            flex: 0 0 30px;
-            width: 30px;
+            /* size to its own text (A vs Harm.) instead of a fixed width —
+               a fixed width sized for the longest label was stealing
+               slider space on every row, including plain A/D/S/R.
+               .control-label's own width:100% must be overridden here or
+               it silently wins (nothing else in this rule redeclares it). */
+            flex: 0 0 auto;
+            width: auto;
+            white-space: nowrap;
             font-size: 9px;
             cursor: help;
         }
