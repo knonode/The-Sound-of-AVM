@@ -148,17 +148,6 @@
             border-top: 1px dashed #006666;
         }
 
-        select.waveform-select { /* More specific selector */
-            background-color: #004d4d;
-            color: white;
-            border: none;
-            padding: 2px;
-            border-radius: 3px;
-            width: 100%;
-            font-size: 10px;
-            box-sizing: border-box; /* Include padding in width */
-        }
-
         /* Value display spans nested inside control labels */
         .control-label span[id$="-value"] {
             font-size: 10px;
@@ -342,27 +331,29 @@
             border-bottom-color: #00cccc;
         }
 
-        /* Tabs: an actual tab look — the active tab merges into the panel
-           below (same fill, no seam); inactive tabs sit dimmer behind it. */
+        /* Tabs: flat, no fill of their own — inherit the card's background,
+           same language as the engine picker above. Inactive labels use
+           the same muted green as the type/subtype dropdowns; active gets
+           full white + a cyan underline. */
         .tab-strip {
             border-bottom: 1px solid #004d4d;
         }
         .tab-btn {
-            background-color: #002626;
-            color: rgba(255, 255, 255, 0.7);
-            border: 1px solid #004d4d;
-            border-bottom: none;
-            border-radius: 3px 3px 0 0;
+            background: transparent;
+            color: #029e0a;
+            border: none;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-btn:hover {
+            color: #3fd14f;
+            background: transparent;
         }
         .tab-btn.active {
-            background-color: #004d4d;
             color: #fff;
-            border-color: #006666;
+            border-bottom-color: #00cccc;
         }
         .synth-tab-content {
-            background-color: #004d4d;
             padding: 3px 2px 0;
-            border-radius: 0 0 4px 4px;
         }
 
         .adsr-row {
