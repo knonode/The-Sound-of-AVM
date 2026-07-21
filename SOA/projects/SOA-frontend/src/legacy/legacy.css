@@ -9,10 +9,14 @@
         body {
             font-family: 'Berkeley Mono Trial', Arial, sans-serif;
             background: linear-gradient(135deg, #004d4d, #001a1a);
+            min-height: 100vh; /* body only grows to fit content — on a
+                short page (no synths yet) the gradient stopped early and
+                the browser's default white showed below it */
             color: #eee;
             margin: 0;
             padding: 10px;
             font-size: 12px;
+            box-sizing: border-box;
         }
 
         .top-bar {
