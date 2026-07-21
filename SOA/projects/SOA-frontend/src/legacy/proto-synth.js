@@ -593,7 +593,7 @@ const createSynthHTML = (synthInstance) => {
 
         <!-- Step Sequencer Section -->
         <div class="sequencer-section">
-            <span class="control-label">Sequencer (Semitone Offset)</span>
+            <span class="control-label" style="cursor:help" title="Semitone Offset">Sequencer</span>
             <div class="control-row sequencer-steps">
                 ${sequenceInputsHTML}
             </div>
