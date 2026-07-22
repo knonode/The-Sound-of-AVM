@@ -15,6 +15,7 @@ import * as Tone from 'tone';
 import GossipAPI from '../services/gossip';
 import { initXenakisViz, vizAddTx, vizAddBlock } from './xenakis-viz.js';
 import { initLoomViz, loomAddTx, loomAddBlock } from './loom-viz.js';
+import { initKintsugiViz, kintsugiAddTx, kintsugiAddBlock } from './kintsugi-viz.js';
 import {
     initAudio,
     initializeToneForInstance,
@@ -974,9 +975,11 @@ const startTransactionStream = async () => {
     if (mainType === 'block') {
         vizAddBlock(txData.round);
         loomAddBlock(txData.round);
+        kintsugiAddBlock(txData.round);
     } else {
         vizAddTx(mainType, txData);
         loomAddTx(mainType, txData);
+        kintsugiAddTx(mainType, txData);
     }
 
     // --- Update All UI Displays ---
@@ -1795,6 +1798,7 @@ export async function bootLegacySynth() {
   window.getActiveSynths = () => activeSynths;
   initXenakisViz(document.getElementById('xenakis-canvas'));
   initLoomViz(document.getElementById('loom-canvas'));
+  initKintsugiViz(document.getElementById('kintsugi-canvas'));
 
   // Visualization overlay: click a button to take over the screen; click
   // the open viz (or its own button again), or press Escape, to leave.
@@ -1803,6 +1807,7 @@ export async function bootLegacySynth() {
       document.querySelectorAll('.viz-btn[data-viz]').forEach(b => b.classList.toggle('active', b.dataset.viz === target));
       document.getElementById('viz-score').style.display = target === 'score' ? '' : 'none';
       document.getElementById('viz-loom').style.display = target === 'loom' ? '' : 'none';
+      document.getElementById('viz-kintsugi').style.display = target === 'kintsugi' ? '' : 'none';
       vizOverlayOpen = true;
   };
   const closeViz = () => {
@@ -1810,6 +1815,7 @@ export async function bootLegacySynth() {
       document.querySelectorAll('.viz-btn[data-viz]').forEach(b => b.classList.remove('active'));
       document.getElementById('viz-score').style.display = 'none';
       document.getElementById('viz-loom').style.display = 'none';
+      document.getElementById('viz-kintsugi').style.display = 'none';
       vizOverlayOpen = false;
   };
   document.querySelectorAll('.viz-btn[data-viz]').forEach(btn => {
@@ -1820,6 +1826,7 @@ export async function bootLegacySynth() {
   });
   document.getElementById('viz-score').addEventListener('click', closeViz);
   document.getElementById('viz-loom').addEventListener('click', closeViz);
+  document.getElementById('viz-kintsugi').addEventListener('click', closeViz);
 
   // Global keyboard conventions: Escape leaves the viz overlay, Space is
   // play/stop everywhere else — the media-player convention (YouTube,
