@@ -1,0 +1,548 @@
+{
+  "activeSynths": [
+    {
+      "id": "after-block-closure",
+      "config": {
+        "type": "block",
+        "subtype": null,
+        "parameters": {
+          "label": "closure"
+        }
+      },
+      "settings": {
+        "engine": "monosynth",
+        "oscillator": {
+          "type": "triangle"
+        },
+        "envelope": {
+          "attack": 0.035,
+          "decay": 0.5,
+          "sustain": 0.42,
+          "release": 2.8
+        },
+        "detune": -7,
+        "harmonicity": 3,
+        "modulationIndex": 10,
+        "filterEnvelope": {
+          "attack": 0.02,
+          "decay": 1.2,
+          "sustain": 0.18,
+          "release": 3.4
+        },
+        "volume": -10,
+        "pan": -0.08,
+        "muted": false,
+        "savedVolume": null,
+        "mutedByMaster": false,
+        "pitch": 0,
+        "filter": {
+          "cutoff": 520
+        },
+        "delay": {
+          "time": 0.31,
+          "feedback": 0.22,
+          "wet": 0.16
+        },
+        "reverb": {
+          "roomSize": 0.86,
+          "wet": 0.58
+        },
+        "lfo": {
+          "rate": 0.18,
+          "depth": 10,
+          "waveform": "sine",
+          "destination": "volume"
+        },
+        "noteDuration": 0.55,
+        "baseNote": "D1",
+        "sequence": [
+          0,
+          0,
+          7,
+          0,
+          -2,
+          0,
+          5,
+          0
+        ],
+        "currentStepIndex": 0
+      }
+    },
+    {
+      "id": "after-block-gilding",
+      "config": {
+        "type": "block",
+        "subtype": null,
+        "parameters": {
+          "label": "gilding"
+        }
+      },
+      "settings": {
+        "engine": "polysynth",
+        "oscillator": {
+          "type": "fattriangle"
+        },
+        "envelope": {
+          "attack": 0.01,
+          "decay": 0.45,
+          "sustain": 0.12,
+          "release": 2.2
+        },
+        "detune": 9,
+        "harmonicity": 3,
+        "modulationIndex": 10,
+        "filterEnvelope": {
+          "attack": 0.6,
+          "decay": 0.2,
+          "sustain": 0.5,
+          "release": 2
+        },
+        "volume": -17,
+        "pan": 0.38,
+        "muted": false,
+        "savedVolume": null,
+        "mutedByMaster": false,
+        "pitch": 0,
+        "filter": {
+          "cutoff": 5400
+        },
+        "delay": {
+          "time": 0.47,
+          "feedback": 0.48,
+          "wet": 0.44
+        },
+        "reverb": {
+          "roomSize": 0.78,
+          "wet": 0.55
+        },
+        "lfo": {
+          "rate": 0.32,
+          "depth": 7,
+          "waveform": "sine",
+          "destination": "pitch"
+        },
+        "noteDuration": 0.18,
+        "baseNote": "A4",
+        "sequence": [
+          0,
+          7,
+          3,
+          10,
+          5,
+          12,
+          7,
+          3
+        ],
+        "currentStepIndex": 0
+      }
+    },
+    {
+      "id": "after-pay-shards",
+      "config": {
+        "type": "pay",
+        "subtype": null,
+        "parameters": {
+          "label": "shards"
+        }
+      },
+      "settings": {
+        "engine": "synth",
+        "oscillator": {
+          "type": "triangle"
+        },
+        "envelope": {
+          "attack": 0.003,
+          "decay": 0.09,
+          "sustain": 0.05,
+          "release": 0.16
+        },
+        "detune": 0,
+        "harmonicity": 3,
+        "modulationIndex": 10,
+        "filterEnvelope": {
+          "attack": 0.6,
+          "decay": 0.2,
+          "sustain": 0.5,
+          "release": 2
+        },
+        "volume": -15,
+        "pan": -0.42,
+        "muted": false,
+        "savedVolume": null,
+        "mutedByMaster": false,
+        "pitch": 0,
+        "filter": {
+          "cutoff": 2300
+        },
+        "delay": {
+          "time": 0.23,
+          "feedback": 0.26,
+          "wet": 0.24
+        },
+        "reverb": {
+          "roomSize": 0.48,
+          "wet": 0.3
+        },
+        "lfo": {
+          "rate": 5,
+          "depth": 0,
+          "waveform": "sine",
+          "destination": "none"
+        },
+        "noteDuration": 0.055,
+        "baseNote": "D4",
+        "sequence": [
+          0,
+          3,
+          7,
+          10,
+          5,
+          3,
+          -2,
+          0
+        ],
+        "currentStepIndex": 0
+      }
+    },
+    {
+      "id": "after-axfer-facets",
+      "config": {
+        "type": "axfer",
+        "subtype": null,
+        "parameters": {
+          "label": "facets"
+        }
+      },
+      "settings": {
+        "engine": "fm",
+        "oscillator": {
+          "type": "sine"
+        },
+        "envelope": {
+          "attack": 0.004,
+          "decay": 0.16,
+          "sustain": 0.08,
+          "release": 0.34
+        },
+        "detune": 4,
+        "harmonicity": 2.7,
+        "modulationIndex": 18,
+        "filterEnvelope": {
+          "attack": 0.6,
+          "decay": 0.2,
+          "sustain": 0.5,
+          "release": 2
+        },
+        "volume": -17,
+        "pan": 0.46,
+        "muted": false,
+        "savedVolume": null,
+        "mutedByMaster": false,
+        "pitch": 0,
+        "filter": {
+          "cutoff": 1650
+        },
+        "delay": {
+          "time": 0.37,
+          "feedback": 0.31,
+          "wet": 0.3
+        },
+        "reverb": {
+          "roomSize": 0.52,
+          "wet": 0.34
+        },
+        "lfo": {
+          "rate": 0.55,
+          "depth": 12,
+          "waveform": "triangle",
+          "destination": "cutoff"
+        },
+        "noteDuration": 0.08,
+        "baseNote": "A3",
+        "sequence": [
+          0,
+          2,
+          5,
+          7,
+          10,
+          7,
+          3,
+          -2
+        ],
+        "currentStepIndex": 0
+      }
+    },
+    {
+      "id": "after-appl-cipher-dust",
+      "config": {
+        "type": "appl",
+        "subtype": null,
+        "parameters": {
+          "label": "cipher dust"
+        }
+      },
+      "settings": {
+        "engine": "synth",
+        "oscillator": {
+          "type": "square"
+        },
+        "envelope": {
+          "attack": 0.001,
+          "decay": 0.035,
+          "sustain": 0.02,
+          "release": 0.07
+        },
+        "detune": -3,
+        "harmonicity": 3,
+        "modulationIndex": 10,
+        "filterEnvelope": {
+          "attack": 0.6,
+          "decay": 0.2,
+          "sustain": 0.5,
+          "release": 2
+        },
+        "volume": -21,
+        "pan": 0.16,
+        "muted": false,
+        "savedVolume": null,
+        "mutedByMaster": false,
+        "pitch": 0,
+        "filter": {
+          "cutoff": 3900
+        },
+        "delay": {
+          "time": 0.59,
+          "feedback": 0.38,
+          "wet": 0.36
+        },
+        "reverb": {
+          "roomSize": 0.64,
+          "wet": 0.42
+        },
+        "lfo": {
+          "rate": 3.1,
+          "depth": 16,
+          "waveform": "triangle",
+          "destination": "delayTime"
+        },
+        "noteDuration": 0.025,
+        "baseNote": "D6",
+        "sequence": [
+          0,
+          -2,
+          3,
+          7,
+          10,
+          12,
+          15,
+          7
+        ],
+        "currentStepIndex": 0
+      }
+    },
+    {
+      "id": "after-group-gold-seam",
+      "config": {
+        "type": "group",
+        "subtype": null,
+        "parameters": {
+          "label": "gold seam"
+        }
+      },
+      "settings": {
+        "engine": "synth",
+        "oscillator": {
+          "type": "fatsine"
+        },
+        "envelope": {
+          "attack": 0.025,
+          "decay": 0.42,
+          "sustain": 0.35,
+          "release": 1.7
+        },
+        "detune": 0,
+        "harmonicity": 3,
+        "modulationIndex": 10,
+        "filterEnvelope": {
+          "attack": 0.6,
+          "decay": 0.2,
+          "sustain": 0.5,
+          "release": 2
+        },
+        "volume": -11,
+        "pan": 0,
+        "muted": false,
+        "savedVolume": null,
+        "mutedByMaster": false,
+        "pitch": 0,
+        "filter": {
+          "cutoff": 1900
+        },
+        "delay": {
+          "time": 0.41,
+          "feedback": 0.4,
+          "wet": 0.32
+        },
+        "reverb": {
+          "roomSize": 0.72,
+          "wet": 0.54
+        },
+        "lfo": {
+          "rate": 0.42,
+          "depth": 9,
+          "waveform": "sine",
+          "destination": "pitch"
+        },
+        "noteDuration": 0.32,
+        "baseNote": "D3",
+        "sequence": [
+          0,
+          7,
+          12,
+          7,
+          3,
+          10,
+          5,
+          14
+        ],
+        "currentStepIndex": 0
+      }
+    },
+    {
+      "id": "after-hb-breath",
+      "config": {
+        "type": "hb",
+        "subtype": null,
+        "parameters": {
+          "label": "network breath"
+        }
+      },
+      "settings": {
+        "engine": "synth",
+        "oscillator": {
+          "type": "sine"
+        },
+        "envelope": {
+          "attack": 0.32,
+          "decay": 0.55,
+          "sustain": 0.4,
+          "release": 2.4
+        },
+        "detune": 0,
+        "harmonicity": 3,
+        "modulationIndex": 10,
+        "filterEnvelope": {
+          "attack": 0.6,
+          "decay": 0.2,
+          "sustain": 0.5,
+          "release": 2
+        },
+        "volume": -19,
+        "pan": -0.12,
+        "muted": false,
+        "savedVolume": null,
+        "mutedByMaster": false,
+        "pitch": 0,
+        "filter": {
+          "cutoff": 460
+        },
+        "delay": {
+          "time": 0,
+          "feedback": 0,
+          "wet": 0
+        },
+        "reverb": {
+          "roomSize": 0.9,
+          "wet": 0.68
+        },
+        "lfo": {
+          "rate": 0.16,
+          "depth": 18,
+          "waveform": "sine",
+          "destination": "volume"
+        },
+        "noteDuration": 1.5,
+        "baseNote": "A1",
+        "sequence": [
+          0,
+          0,
+          3,
+          0,
+          -2,
+          0,
+          5,
+          0
+        ],
+        "currentStepIndex": 0
+      }
+    },
+    {
+      "id": "after-stpf-memory",
+      "config": {
+        "type": "stpf",
+        "subtype": "stpf",
+        "parameters": {
+          "label": "memory of the whole"
+        }
+      },
+      "settings": {
+        "engine": "polysynth",
+        "oscillator": {
+          "type": "fattriangle"
+        },
+        "envelope": {
+          "attack": 4.5,
+          "decay": 1.8,
+          "sustain": 0.58,
+          "release": 9
+        },
+        "detune": 6,
+        "harmonicity": 3,
+        "modulationIndex": 10,
+        "filterEnvelope": {
+          "attack": 0.6,
+          "decay": 0.2,
+          "sustain": 0.5,
+          "release": 2
+        },
+        "volume": -18,
+        "pan": 0.1,
+        "muted": false,
+        "savedVolume": null,
+        "mutedByMaster": false,
+        "pitch": 0,
+        "filter": {
+          "cutoff": 980
+        },
+        "delay": {
+          "time": 0.67,
+          "feedback": 0.42,
+          "wet": 0.3
+        },
+        "reverb": {
+          "roomSize": 0.96,
+          "wet": 0.88
+        },
+        "lfo": {
+          "rate": 0.11,
+          "depth": 8,
+          "waveform": "sine",
+          "destination": "pitch"
+        },
+        "noteDuration": 5.5,
+        "baseNote": "D2",
+        "sequence": [
+          0,
+          7,
+          12,
+          15,
+          10,
+          5,
+          3,
+          0
+        ],
+        "currentStepIndex": 0
+      }
+    }
+  ]
+}
