@@ -211,8 +211,23 @@ function connectLFO(instance) {
     }
 }
 
-// Initialize global Tone.js audio context and master FX chain
-async function initAudio() {
+// Initialize global Tone.js audio context and master FX chain.
+// Single-flight: a call before the first user gesture parks inside
+// Tone.start() on the browser's autoplay policy, so a later (post-gesture)
+// call must join that pending attempt rather than build a second master
+// chain on top of the first.
+let initAudioPromise = null;
+function initAudio() {
+  if (!initAudioPromise) {
+    initAudioPromise = doInitAudio().catch((error) => {
+      initAudioPromise = null; // a real failure may be retried
+      throw error;
+    });
+  }
+  return initAudioPromise;
+}
+
+async function doInitAudio() {
   if (synthsInitialized) return; // Prevent re-running if already initialized globally
 
 

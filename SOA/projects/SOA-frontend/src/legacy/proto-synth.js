@@ -1391,7 +1391,7 @@ document.querySelectorAll('input[id$="-note-duration"]').forEach(input => {
 });
 
 // <<< Function to load a preset from a file or URL >>>
-async function loadPresetFromSource(source) {
+async function loadPresetFromSource(source, { deferAudio = false } = {}) {
     let presetData;
     let presetName = '';
 
@@ -1457,10 +1457,15 @@ async function loadPresetFromSource(source) {
             renderParameterArea(instance.id, instance.config.type, instance.config.subtype);
         });
 
-        // Initialize Audio for New Instances
-        if (!synthsInitialized) { await initAudio(); }
-        for (const instance of targetActiveSynths) {
-            await initializeToneForInstance(instance);
+        // Initialize Audio for New Instances. At boot (URL deep link) no
+        // user gesture has happened yet, so audio init would park on the
+        // autoplay policy — leave toneObjects null; the Play button and
+        // LED-click paths initialize them on demand.
+        if (!deferAudio) {
+            if (!synthsInitialized) { await initAudio(); }
+            for (const instance of targetActiveSynths) {
+                await initializeToneForInstance(instance);
+            }
         }
 
         updateStatus(`Preset "${presetName}" loaded`);
@@ -1470,6 +1475,8 @@ async function loadPresetFromSource(source) {
             name: presetName.replace(/\.json$/, ''),
             source: typeof source === 'string' ? 'server' : null
         };
+        if (currentPreset.source === 'server') setPresetUrl(currentPreset.name);
+        else setPresetUrl(null); // file imports aren't reachable by link
         document.getElementById('load-preset-modal').style.display = 'none';
 
     } catch (error) {
@@ -1483,6 +1490,22 @@ async function loadPresetFromSource(source) {
 // source: 'local' (user's localStorage, overwritable) | 'server' (premade,
 // read-only) | null (scratch layout, imported file, NFT).
 let currentPreset = { name: null, source: null };
+
+// --- Shareable preset URLs: one clean path segment for both kinds ---
+// /after-the-breaking (server preset) or /831858054 (NFT asset id — all
+// digits, so the two can share the slot without a prefix).
+const SERVER_PRESETS = ['vanilla', 'block-anxiety', 'ceremony-in-d', 'after-the-breaking'];
+let pendingAssetIdForUrl = null; // asset id of the NFT preset load in flight
+
+// Keep the address bar in sync with what's loaded, so copying the URL is
+// all it takes to share it. Only server presets and NFT assets are
+// reachable by other people; every other load clears the path so a copied
+// URL never lies.
+function setPresetUrl(slug) {
+    try {
+        history.replaceState(null, '', slug ? `/${encodeURIComponent(slug)}` : '/');
+    } catch { /* best-effort; never break a preset load over the URL */ }
+}
 
 function writePreset(presetName, download) {
     const presetData = {
@@ -1584,6 +1607,7 @@ function handleSaveAs() {
     }
     if (writePreset(presetName, document.getElementById('download-json-toggle').checked)) {
         currentPreset = { name: presetName, source: 'local' };
+        setPresetUrl(null); // the layout is a local preset now — the old slug no longer describes it
         closeSaveModal();
     }
 }
@@ -1703,12 +1727,7 @@ export async function bootLegacySynth() {
       container.innerHTML = ''; // Clear previous buttons
 
       // Add buttons for server presets
-      [
-        'presets/vanilla.json',
-        'presets/block-anxiety.json',
-        'presets/ceremony-in-d.json',
-        'presets/after-the-breaking.json',
-      ].forEach(name => {
+      SERVER_PRESETS.map(n => `presets/${n}.json`).forEach(name => {
         const button = document.createElement('button');
         button.textContent = name.replace(/^presets\//, '').replace('.json', '');
         button.dataset.fileName = name;
@@ -1886,6 +1905,18 @@ export async function bootLegacySynth() {
   injectSliderStyles();
   loadPersistentCounters();
 
+  // Deep links from shared URLs: /<name> loads a premade server preset,
+  // /<digits> loads a minted NFT preset by asset id (indexer lookup —
+  // works without a wallet). Audio stays untouched until the first
+  // gesture, so the visitor lands on the loaded preset and just presses Play.
+  const slug = decodeURIComponent(window.location.pathname.replace(/^\/+|\/+$/g, ''));
+  if (SERVER_PRESETS.includes(slug)) {
+      loadPresetFromSource(`presets/${slug}.json`, { deferAudio: true });
+  } else if (/^\d+$/.test(slug)) {
+      pendingAssetIdForUrl = slug;
+      window.postMessage({ type: 'REQUEST_NFPRESET_LOAD', assetId: parseInt(slug, 10) }, '*');
+  }
+
   // <<< Aggregation mode toggle: label shows the ACTIVE mode >>>
   toggleAggrBtn.disabled = false;
   toggleAggrBtn.textContent = 'Mode: Single';
@@ -1932,6 +1963,7 @@ export async function bootLegacySynth() {
       loadAssetIdBtn.disabled = true;
 
       // Request preset from React
+      pendingAssetIdForUrl = String(assetIdNum);
       window.postMessage({
         type: 'REQUEST_NFPRESET_LOAD',
         assetId: assetIdNum
@@ -1970,6 +2002,7 @@ export async function bootLegacySynth() {
   function handleUserNftPresetClick(assetId) {
     try {
       // Request preset from React
+      pendingAssetIdForUrl = String(parseInt(assetId));
       window.postMessage({
         type: 'REQUEST_NFPRESET_LOAD',
         assetId: parseInt(assetId)
@@ -3393,6 +3426,7 @@ const loadPresetFromLocalStorage = async (presetNameToLoad) => {
   console.log(`Preset "${presetName}" loaded successfully.`);
   updateStatus(`Preset "${presetName}" loaded`);
   currentPreset = { name: presetName, source: 'local' };
+  setPresetUrl(null); // local presets live in this browser only — not linkable
   // Optionally clear status after a delay
   // setTimeout(() => updateStatus('Streaming...'), 2000);
 };
@@ -3489,6 +3523,8 @@ function loadNftPreset(presetData) {
     }
 
     updateStatus(`NFT preset loaded successfully`);
+    setPresetUrl(pendingAssetIdForUrl); // null clears — non-linkable load
+    pendingAssetIdForUrl = null;
     // Find the modal element directly
     const loadModal = document.getElementById('load-preset-modal');
     if (loadModal) {
@@ -3498,6 +3534,7 @@ function loadNftPreset(presetData) {
 
   } catch (error) {
     console.error('Failed to load NFT preset:', error);
+    pendingAssetIdForUrl = null;
     showLoadError(`Error loading NFT preset: ${error.message}`);
   }
 }
