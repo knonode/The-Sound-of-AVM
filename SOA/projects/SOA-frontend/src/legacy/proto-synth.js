@@ -1494,7 +1494,7 @@ let currentPreset = { name: null, source: null };
 // --- Shareable preset URLs: one clean path segment for both kinds ---
 // /after-the-breaking (server preset) or /831858054 (NFT asset id — all
 // digits, so the two can share the slot without a prefix).
-const SERVER_PRESETS = ['vanilla', 'block-anxiety', 'ceremony-in-d', 'after-the-breaking'];
+const SERVER_PRESETS = ['vanilla', 'block-anxiety', 'ceremony-in-d', 'after-the-breaking', 'null-un-drone'];
 let pendingAssetIdForUrl = null; // asset id of the NFT preset load in flight
 
 // Keep the address bar in sync with what's loaded, so copying the URL is

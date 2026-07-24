@@ -1,0 +1,421 @@
+{
+    "activeSynths": [
+        {
+            "id": "lofi2-block-breathinghorizon",
+            "config": {
+                "type": "block",
+                "subtype": null,
+                "parameters": {
+                    "label": "breathing horizon"
+                }
+            },
+            "settings": {
+                "engine": "monosynth",
+                "oscillator": {
+                    "type": "fatsine"
+                },
+                "envelope": {
+                    "attack": 1.2,
+                    "decay": 0.8,
+                    "sustain": 0.7,
+                    "release": 4
+                },
+                "filterEnvelope": {
+                    "attack": 2.2,
+                    "decay": 1.5,
+                    "sustain": 0.25,
+                    "release": 3.5
+                },
+                "volume": -11,
+                "pan": 0,
+                "muted": false,
+                "savedVolume": null,
+                "mutedByMaster": false,
+                "pitch": 0,
+                "filter": {
+                    "cutoff": 520
+                },
+                "delay": {
+                    "time": 0,
+                    "feedback": 0,
+                    "wet": 0
+                },
+                "reverb": {
+                    "roomSize": 0.9,
+                    "wet": 0.6
+                },
+                "lfo": {
+                    "rate": 0.13,
+                    "depth": 8,
+                    "waveform": "triangle",
+                    "destination": "volume"
+                },
+                "noteDuration": 2.4,
+                "baseNote": "D1",
+                "sequence": [0, 0, 0, 0, 0, 0, 0, 0],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "lofi2-hb-shimmerwind",
+            "config": {
+                "type": "hb",
+                "subtype": null,
+                "parameters": {
+                    "label": "shimmer wind"
+                }
+            },
+            "settings": {
+                "engine": "am",
+                "oscillator": {
+                    "type": "fattriangle"
+                },
+                "envelope": {
+                    "attack": 2.5,
+                    "decay": 1,
+                    "sustain": 0.6,
+                    "release": 6
+                },
+                "harmonicity": 1.5,
+                "volume": -17,
+                "pan": 0.15,
+                "muted": false,
+                "savedVolume": null,
+                "mutedByMaster": false,
+                "pitch": 0,
+                "filter": {
+                    "cutoff": 950
+                },
+                "delay": {
+                    "time": 0.6,
+                    "feedback": 0.3,
+                    "wet": 0.25
+                },
+                "reverb": {
+                    "roomSize": 0.95,
+                    "wet": 0.8
+                },
+                "lfo": {
+                    "rate": 0.4,
+                    "depth": 7,
+                    "waveform": "triangle",
+                    "destination": "pitch"
+                },
+                "noteDuration": 4,
+                "baseNote": "A2",
+                "sequence": [0, 3, 0, 5, 0, 3, 0, -2],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "lofi2-pay-warblemelody",
+            "config": {
+                "type": "pay",
+                "subtype": null,
+                "parameters": {
+                    "label": "warble tape melody"
+                }
+            },
+            "settings": {
+                "engine": "polysynth",
+                "oscillator": {
+                    "type": "triangle"
+                },
+                "envelope": {
+                    "attack": 0.03,
+                    "decay": 0.35,
+                    "sustain": 0.2,
+                    "release": 1.4
+                },
+                "volume": -15,
+                "pan": -0.2,
+                "muted": false,
+                "savedVolume": null,
+                "mutedByMaster": false,
+                "pitch": 0,
+                "filter": {
+                    "cutoff": 1800
+                },
+                "delay": {
+                    "time": 0.375,
+                    "feedback": 0.45,
+                    "wet": 0.35
+                },
+                "reverb": {
+                    "roomSize": 0.7,
+                    "wet": 0.45
+                },
+                "lfo": {
+                    "rate": 0.35,
+                    "depth": 10,
+                    "waveform": "sine",
+                    "destination": "delayTime"
+                },
+                "noteDuration": 0.18,
+                "baseNote": "D4",
+                "sequence": [0, 3, 5, 10, 7, 12, 5, 3],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "lofi2-axfer-tidalsatellites",
+            "config": {
+                "type": "axfer",
+                "subtype": null,
+                "parameters": {
+                    "label": "tidal satellites"
+                }
+            },
+            "settings": {
+                "engine": "polysynth",
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.01,
+                    "decay": 0.2,
+                    "sustain": 0.1,
+                    "release": 0.9
+                },
+                "volume": -19,
+                "pan": 0.35,
+                "muted": false,
+                "savedVolume": null,
+                "mutedByMaster": false,
+                "pitch": 0,
+                "filter": {
+                    "cutoff": 2600
+                },
+                "delay": {
+                    "time": 0.5,
+                    "feedback": 0.5,
+                    "wet": 0.4
+                },
+                "reverb": {
+                    "roomSize": 0.8,
+                    "wet": 0.5
+                },
+                "lfo": {
+                    "rate": 0.18,
+                    "depth": 22,
+                    "waveform": "sine",
+                    "destination": "cutoff"
+                },
+                "noteDuration": 0.12,
+                "baseNote": "A4",
+                "sequence": [12, 7, 10, 5, 7, 3, 5, 0],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "lofi2-appl-stuttercrackle",
+            "config": {
+                "type": "appl",
+                "subtype": null,
+                "parameters": {
+                    "label": "stutter crackle"
+                }
+            },
+            "settings": {
+                "engine": "polysynth",
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.001,
+                    "decay": 0.04,
+                    "sustain": 0.03,
+                    "release": 0.05
+                },
+                "volume": -24,
+                "pan": -0.5,
+                "muted": false,
+                "savedVolume": null,
+                "mutedByMaster": false,
+                "pitch": 0,
+                "filter": {
+                    "cutoff": 3000
+                },
+                "delay": {
+                    "time": 0.25,
+                    "feedback": 0.2,
+                    "wet": 0.15
+                },
+                "reverb": {
+                    "roomSize": 0.6,
+                    "wet": 0.4
+                },
+                "lfo": {
+                    "rate": 3,
+                    "depth": 12,
+                    "waveform": "square",
+                    "destination": "volume"
+                },
+                "noteDuration": 0.03,
+                "baseNote": "D5",
+                "sequence": [0, 0, 7, 0, 5, 0, 0, 3],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "lofi2-group-slowmotionorbits",
+            "config": {
+                "type": "group",
+                "subtype": null,
+                "parameters": {
+                    "label": "slow-motion orbits"
+                }
+            },
+            "settings": {
+                "engine": "monosynth",
+                "oscillator": {
+                    "type": "sawtooth"
+                },
+                "envelope": {
+                    "attack": 0.05,
+                    "decay": 0.3,
+                    "sustain": 0.25,
+                    "release": 1
+                },
+                "filterEnvelope": {
+                    "attack": 0.01,
+                    "decay": 0.45,
+                    "sustain": 0.1,
+                    "release": 0.8
+                },
+                "volume": -18,
+                "pan": 0.4,
+                "muted": false,
+                "savedVolume": null,
+                "mutedByMaster": false,
+                "pitch": 0,
+                "filter": {
+                    "cutoff": 750
+                },
+                "delay": {
+                    "time": 0.42,
+                    "feedback": 0.4,
+                    "wet": 0.35
+                },
+                "reverb": {
+                    "roomSize": 0.7,
+                    "wet": 0.4
+                },
+                "lfo": {
+                    "rate": 0.6,
+                    "depth": 5,
+                    "waveform": "triangle",
+                    "destination": "pitch"
+                },
+                "noteDuration": 0.2,
+                "baseNote": "D3",
+                "sequence": [0, 7, 12, 10, 7, 5, 3, 0],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "lofi2-pay-bellwells",
+            "config": {
+                "type": "pay",
+                "subtype": "amount",
+                "parameters": {
+                    "label": "bell wells >2kA",
+                    "min": 2000,
+                    "max": null
+                }
+            },
+            "settings": {
+                "engine": "fm",
+                "oscillator": {
+                    "type": "sine"
+                },
+                "envelope": {
+                    "attack": 0.6,
+                    "decay": 0.8,
+                    "sustain": 0.5,
+                    "release": 3.5
+                },
+                "harmonicity": 0.5,
+                "modulationIndex": 4,
+                "volume": -14,
+                "pan": 0,
+                "muted": false,
+                "savedVolume": null,
+                "mutedByMaster": false,
+                "pitch": 0,
+                "filter": {
+                    "cutoff": 900
+                },
+                "delay": {
+                    "time": 0.56,
+                    "feedback": 0.35,
+                    "wet": 0.25
+                },
+                "reverb": {
+                    "roomSize": 0.92,
+                    "wet": 0.65
+                },
+                "lfo": {
+                    "rate": 0.22,
+                    "depth": 9,
+                    "waveform": "sine",
+                    "destination": "volume"
+                },
+                "noteDuration": 1.2,
+                "baseNote": "D2",
+                "sequence": [0, 7, 0, 5, 0, -5, 0, 7],
+                "currentStepIndex": 0
+            }
+        },
+        {
+            "id": "lofi2-stpf-driftingbeacon",
+            "config": {
+                "type": "stpf",
+                "subtype": "stpf",
+                "parameters": {
+                    "label": "drifting beacon"
+                }
+            },
+            "settings": {
+                "engine": "polysynth",
+                "oscillator": {
+                    "type": "fattriangle"
+                },
+                "envelope": {
+                    "attack": 6,
+                    "decay": 2,
+                    "sustain": 0.7,
+                    "release": 8
+                },
+                "volume": -14,
+                "pan": 0,
+                "muted": false,
+                "savedVolume": null,
+                "mutedByMaster": false,
+                "pitch": 0,
+                "filter": {
+                    "cutoff": 850
+                },
+                "delay": {
+                    "time": 0.6,
+                    "feedback": 0.35,
+                    "wet": 0.3
+                },
+                "reverb": {
+                    "roomSize": 0.95,
+                    "wet": 0.9
+                },
+                "lfo": {
+                    "rate": 0.07,
+                    "depth": 30,
+                    "waveform": "sawtooth",
+                    "destination": "cutoff"
+                },
+                "noteDuration": 6,
+                "baseNote": "A1",
+                "sequence": [0, 0, 0, 0, 0, 0, 0, 0],
+                "currentStepIndex": 0
+            }
+        }
+    ]
+}
