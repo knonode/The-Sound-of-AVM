@@ -47,6 +47,18 @@ let transactionCount = 0;
 let txTypeCounts = {};
 let persistentTotalTxs = 0;
 let persistentTotalBlocks = 0;
+
+// localStorage writes are synchronous disk I/O — at mempool rate they add
+// up, so the lifetime counters flush on a slow timer instead of per tx.
+let persistentCountersDirty = false;
+function flushPersistentCounters() {
+    if (!persistentCountersDirty) return;
+    persistentCountersDirty = false;
+    localStorage.setItem('persistentTotalTxs', persistentTotalTxs.toString());
+    localStorage.setItem('persistentTotalBlocks', persistentTotalBlocks.toString());
+}
+setInterval(flushPersistentCounters, 5000);
+window.addEventListener('pagehide', flushPersistentCounters);
 let lastProcessedRound = null;
 
 let activeSynths = [];
@@ -383,14 +395,24 @@ function updateTypeCountsDisplay() {
         return;
     }
 
-    // Build HTML string based on mainTxTypes order and current counts
-    let htmlContent = mainTxTypes.map(type => {
+    // Build HTML string based on mainTxTypes order and current counts,
+    // followed by any types the stream produced that aren't in the rules
+    const allTypes = [...new Set([...mainTxTypes, ...Object.keys(txTypeCounts)])];
+    let htmlContent = allTypes.map(type => {
         const count = txTypeCounts[type] || 0; // Get count, default to 0
         // Only display if count > 0 or always display? Let's display always for consistency.
         return `<span class="type-count" id="count-${type}">${type}: ${count}</span>`;
     }).join(' '); // Add space between counts
 
     container.innerHTML = htmlContent || 'No transactions yet.'; // Show message if empty
+}
+
+// Hot path: update the one changed counter's text in place — a full
+// innerHTML rebuild per transaction churns DOM nodes at mempool rate.
+function bumpTypeCountDisplay(type) {
+    const el = document.getElementById(`count-${type}`);
+    if (el) el.textContent = `${type}: ${txTypeCounts[type] || 0}`;
+    else updateTypeCountsDisplay(); // first sighting of this type: build its span
 }
 
 // SVG Icons for Mute/Unmute (Monochrome)
@@ -949,9 +971,10 @@ const startTransactionStream = async () => {
         }
     }
 
-    // Always refresh displays with the latest data.
-    // Delay round display update to ensure DOM is ready
-    setTimeout(updateCurrentRoundDisplays, 10);
+    // Round displays only change when a block certifies — refreshing (and
+    // allocating a timer) per transaction was pure churn. The small delay
+    // lets the DOM settle, as before.
+    if (mainType === 'block') setTimeout(updateCurrentRoundDisplays, 10);
 
     // --- Update All Counters ---
 
@@ -966,10 +989,10 @@ const startTransactionStream = async () => {
     // 2. Persistent counters ('group' is synthetic - members are already counted)
     if (mainType === 'block') {
         persistentTotalBlocks++;
-        localStorage.setItem('persistentTotalBlocks', persistentTotalBlocks.toString());
+        persistentCountersDirty = true;
     } else if (mainType !== 'group') {
         persistentTotalTxs++;
-        localStorage.setItem('persistentTotalTxs', persistentTotalTxs.toString());
+        persistentCountersDirty = true;
     }
 
     // --- Feed the visualizations (hidden ones sleep; feeding is cheap) ---
@@ -988,7 +1011,7 @@ const startTransactionStream = async () => {
     // --- Update All UI Displays ---
     const totalCountEl = document.getElementById('transaction-count');
     if (totalCountEl) totalCountEl.textContent = `${transactionCount} transactions processed`;
-    updateTypeCountsDisplay();
+    bumpTypeCountDisplay(mainType);
     updatePersistentCountersDisplay();
 
     // --- NEW Prioritized Matching Logic ---
@@ -1065,6 +1088,7 @@ function updateGossipStatus(state) {
 const stopTransactionStream = () => {
     isPlaying = false;
     GossipAPI.stop();
+    flushPersistentCounters();
     updateGossipStatus('idle');
     updateStatus('Stream stopped');
 

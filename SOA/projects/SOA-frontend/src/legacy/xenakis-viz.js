@@ -76,6 +76,9 @@ export function vizAddTx(type, txData) {
     const rows = txn.types.map((mt) => rowIndex[mt]).filter((r) => r !== undefined);
     if (rows.length > 1) {
       ties.push({ t, rows: [Math.min(...rows), Math.max(...rows)] });
+      // prune() only runs while the canvas is visible, so cap here too —
+      // otherwise ties grow without bound whenever another viz has the screen
+      if (ties.length > 1000) ties.splice(0, ties.length - 1000);
     }
   }
 

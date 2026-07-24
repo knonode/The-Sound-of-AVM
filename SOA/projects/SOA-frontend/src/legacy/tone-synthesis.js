@@ -558,6 +558,12 @@ function playTransactionSound(instance, timeOffset = 0, opts = {}) {
     let when = Tone.now() + timeOffset;
     if (toneObjects._lastTriggerTime !== undefined && when <= toneObjects._lastTriggerTime + 0.030) {
       when = toneObjects._lastTriggerTime + 0.030;
+      // Under sustained overflow (>33 triggers/s, reachable when the rate
+      // cap is raised live) this spacing pushes the schedule ever further
+      // ahead of the clock: sound stops tracking the mempool and events
+      // pile up in the graph for hours. Past 1s ahead, drop instead —
+      // _lastTriggerTime stays put, so triggers resume once we catch up.
+      if (when - Tone.now() > 1.0) return;
     }
     toneObjects._lastTriggerTime = when;
     toneObjects.synth.triggerAttackRelease(note, duration, when, velocity);
