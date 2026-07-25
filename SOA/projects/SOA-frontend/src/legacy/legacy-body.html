@@ -19,6 +19,7 @@
             <button class="api-btn viz-btn" disabled title="coming later">Drop</button>
             <button class="api-btn viz-btn" data-viz="kintsugi" title="Kintsugi Ledger — pending state fractures, certified state becomes gold">Kintsugi</button>
             <button class="api-btn viz-btn" data-viz="musicbox" title="Music Box — transactions pin the mempool drum and pluck the comb">Music Box</button>
+            <button class="api-btn viz-btn" data-viz="territory" title="Territory — every transaction claims its share of the screen; arrivals squeeze the standing ground aside">Territory</button>
         </div>
         <span id="stall-counter" title="Main-thread stalls over 50ms since load (temporary diagnostic)">stalls: 0</span>
         <span id="load-readout" title="Audio-thread load: average / peak per interval, plus total render underruns (actual missed deadlines = audible glitches)">load: --</span>
@@ -56,6 +57,9 @@
     </div>
     <div class="viz-container" id="viz-musicbox" style="display: none;">
         <canvas id="musicbox-canvas" class="viz-canvas"></canvas>
+    </div>
+    <div class="viz-container" id="viz-territory" style="display: none;">
+        <div id="territory-root"></div>
     </div>
 
     <!-- Modal for Loading Presets -->

@@ -213,6 +213,80 @@
             height: 100%;
         }
 
+        /* Territory — the mempool as contested ground. No canvas: every
+           transaction is a real div, and its flex-grow IS its weight. The
+           browser does all the squeezing, so an idle Territory costs nothing.
+           Flat color only here — no blur, no glow, no gradient. Ink on paper:
+           a warm sheet, black rules between the blocks, and certified claims
+           thinned by half so the paper reads through them. */
+        #viz-territory {
+            background: #f4f1e9;
+        }
+        #territory-root {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            padding: 1px;
+            box-sizing: border-box;
+            background: #f4f1e9;
+        }
+        .terr-box,
+        .terr-cell {
+            flex-grow: 0;
+            flex-shrink: 1;
+            flex-basis: 0;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            /* ease-in, not ease-out: width is grow/(grow+rest), which is
+               concave, so a linear ramp lurches. This reads as even motion.
+               Duration is mirrored by DURATION in territory-viz.js. */
+            transition: flex-grow 700ms ease-in,
+                        flex-basis 700ms ease-in,
+                        background-color 700ms linear;
+        }
+        .terr-box {
+            display: flex;
+        }
+        /* A cut retires faster than the cells inside it. Cells in one cut are
+           evicted a frame or two apart, so the last of them can outlive the
+           cut and leave bare ground where dead cells still hold space. Losing
+           the cut first simply clips them, and cannot fail the other way: a
+           cut that is growing always holds a full-weight cell that fills it. */
+        .terr-box {
+            transition-duration: 420ms;
+        }
+        /* Cells are told apart by an inset outline rather than a gap, because
+           an outline costs no layout: a cell collapsing to nothing leaves
+           nothing behind. Gutters would keep their width as their cell died
+           and speckle the map with bare ground. */
+        .terr-cell {
+            outline: 1px solid #17150f;
+            outline-offset: -1px;
+        }
+        /* An atomic group: one enclosure, its members framed by the ochre
+           showing through the padding. Nothing may split it. */
+        .terr-group {
+            padding: 2px;
+            box-sizing: border-box;
+        }
+        /* Inside a group the dividing line is the group's own ochre, so the
+           members read as one bound thing rather than neighbours. */
+        .terr-group > .terr-cell {
+            outline-color: var(--terr-bind);
+        }
+        /* A claim carrying no value does not play the size game: it holds a
+           fixed slab while everything elastic gives way around it. */
+        .terr-rigid {
+            flex-grow: 0;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .terr-box,
+            .terr-cell {
+                transition-duration: 1ms;
+            }
+        }
+
         /* LED ladder meters */
         .level-meter {
             position: absolute;

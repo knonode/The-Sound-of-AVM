@@ -17,6 +17,7 @@ import { initXenakisViz, vizAddTx, vizAddBlock } from './xenakis-viz.js';
 import { initLoomViz, loomAddTx, loomAddBlock } from './loom-viz.js';
 import { initKintsugiViz, kintsugiAddTx, kintsugiAddBlock } from './kintsugi-viz.js';
 import { initMusicBoxViz, musicBoxAddTx, musicBoxAddBlock } from './music-box-viz.js';
+import { initTerritoryViz, territoryAddTx, territoryAddBlock } from './territory-viz.js';
 import {
     initAudio,
     initializeToneForInstance,
@@ -1001,11 +1002,13 @@ const startTransactionStream = async () => {
         loomAddBlock(txData.round);
         kintsugiAddBlock(txData.round);
         musicBoxAddBlock(txData.round);
+        territoryAddBlock(txData.round);
     } else {
         vizAddTx(mainType, txData);
         loomAddTx(mainType, txData);
         kintsugiAddTx(mainType, txData);
         musicBoxAddTx(mainType, txData);
+        territoryAddTx(mainType, txData);
     }
 
     // --- Update All UI Displays ---
@@ -1852,6 +1855,8 @@ export async function bootLegacySynth() {
   initLoomViz(document.getElementById('loom-canvas'));
   initKintsugiViz(document.getElementById('kintsugi-canvas'));
   initMusicBoxViz(document.getElementById('musicbox-canvas'));
+  initTerritoryViz(document.getElementById('territory-root'));
+  window.territoryTest = { addTx: territoryAddTx, addBlock: territoryAddBlock };
 
   // Visualization overlay: click a button to take over the screen; click
   // the open viz (or its own button again), or press Escape, to leave.
@@ -1862,6 +1867,7 @@ export async function bootLegacySynth() {
       document.getElementById('viz-loom').style.display = target === 'loom' ? '' : 'none';
       document.getElementById('viz-kintsugi').style.display = target === 'kintsugi' ? '' : 'none';
       document.getElementById('viz-musicbox').style.display = target === 'musicbox' ? '' : 'none';
+      document.getElementById('viz-territory').style.display = target === 'territory' ? '' : 'none';
       vizOverlayOpen = true;
   };
   const closeViz = () => {
@@ -1871,6 +1877,7 @@ export async function bootLegacySynth() {
       document.getElementById('viz-loom').style.display = 'none';
       document.getElementById('viz-kintsugi').style.display = 'none';
       document.getElementById('viz-musicbox').style.display = 'none';
+      document.getElementById('viz-territory').style.display = 'none';
       vizOverlayOpen = false;
   };
   document.querySelectorAll('.viz-btn[data-viz]').forEach(btn => {
@@ -1883,6 +1890,7 @@ export async function bootLegacySynth() {
   document.getElementById('viz-loom').addEventListener('click', closeViz);
   document.getElementById('viz-kintsugi').addEventListener('click', closeViz);
   document.getElementById('viz-musicbox').addEventListener('click', closeViz);
+  document.getElementById('viz-territory').addEventListener('click', closeViz);
 
   // Global keyboard conventions: Escape leaves the viz overlay, Space is
   // play/stop everywhere else — the media-player convention (YouTube,
