@@ -1729,25 +1729,56 @@ export async function bootLegacySynth() {
       const container = document.getElementById('modal-preset-buttons');
       container.innerHTML = ''; // Clear previous buttons
 
-      // Add buttons for server presets
-      SERVER_PRESETS.map(n => `presets/${n}.json`).forEach(name => {
-        const button = document.createElement('button');
-        button.textContent = name.replace(/^presets\//, '').replace('.json', '');
-        button.dataset.fileName = name;
-        container.appendChild(button);
-      });
+      // Every preset gets a row: the load button plus an X. The X only bites on
+      // presets the user saved themselves — shipped ones keep it greyed out so
+      // the row shape stays identical down the list.
+      const addRow = (label, data, deletableName) => {
+          const row = document.createElement('div');
+          row.className = 'preset-row';
 
-      // Add buttons for user presets from localStorage
-      const userPresets = JSON.parse(localStorage.getItem('txSynthPresets') || '{}');
-      const presetNames = Object.keys(userPresets);
-      if (presetNames.length > 0) {
-          presetNames.forEach(name => {
-              const button = document.createElement('button');
-              button.textContent = name;
-              button.dataset.presetName = name;
-              container.appendChild(button);
-          });
+          const button = document.createElement('button');
+          button.textContent = label;
+          Object.assign(button.dataset, data);
+
+          const del = document.createElement('button');
+          del.className = 'preset-delete';
+          del.textContent = '×';
+          if (deletableName) {
+              del.dataset.deleteName = deletableName;
+              del.title = `Delete "${deletableName}"`;
+          } else {
+              del.disabled = true;
+              del.title = "Shipped preset — can't be deleted";
+          }
+
+          row.appendChild(button);
+          row.appendChild(del);
+          container.appendChild(row);
+      };
+
+      // Server presets first, then the user's own from localStorage
+      SERVER_PRESETS.forEach(name => addRow(name, { fileName: `presets/${name}.json` }, null));
+      Object.keys(JSON.parse(localStorage.getItem('txSynthPresets') || '{}'))
+          .forEach(name => addRow(name, { presetName: name }, name));
+  }
+
+  function deleteLocalPreset(name) {
+      try {
+          const presets = JSON.parse(localStorage.getItem('txSynthPresets') || '{}');
+          delete presets[name];
+          localStorage.setItem('txSynthPresets', JSON.stringify(presets));
+      } catch (error) {
+          console.error('Error deleting preset from Local Storage:', error);
+          alert('Failed to delete preset from Local Storage.');
+          return;
       }
+      // The layout on screen stays put, but it no longer has a saved home —
+      // otherwise Save would silently resurrect what was just discarded.
+      if (currentPreset.source === 'local' && currentPreset.name === name) {
+          currentPreset = { name: currentPreset.name, source: null };
+      }
+      updateStatus(`Preset "${name}" deleted`);
+      populateLoadModal();
   }
 
 //  await initAudio();
@@ -1822,6 +1853,14 @@ export async function bootLegacySynth() {
   modalPresetButtons.addEventListener('click', (event) => {
       const target = event.target;
       if (target.tagName !== 'BUTTON') return;
+
+      if (target.classList.contains('preset-delete')) {
+          const name = target.dataset.deleteName;
+          if (name && confirm(`Delete preset "${name}"? This can't be undone.`)) {
+              deleteLocalPreset(name);
+          }
+          return; // never fall through to a load
+      }
 
       if (target.dataset.fileName) { // For server presets
           loadPresetFromSource(target.dataset.fileName);

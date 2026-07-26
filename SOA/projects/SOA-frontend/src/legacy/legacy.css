@@ -828,6 +828,23 @@
         .modal-buttons button { width: 100%; }
         .modal-content hr { border-color: #006666; margin: 15px 0; }
 
+        /* Preset rows in the load modal: name button + delete X on the right */
+        #modal-preset-buttons .preset-row { display: flex; gap: 6px; }
+        /* min-width:0 so a long preset name clips instead of shoving the X out */
+        #modal-preset-buttons .preset-row > button:first-child {
+            flex: 1 1 auto;
+            min-width: 0;
+            width: auto;
+            overflow: hidden;
+        }
+        #modal-preset-buttons .preset-delete {
+            flex: 0 0 auto;
+            width: 34px;
+            padding: 0;
+            line-height: 1;
+            font-size: 16px;
+        }
+
         /* <<< NEW: Style for the Master Synth >>> */
         .master-synth {
             border: 2px solid #010e0b; /* A bright, distinct border */
