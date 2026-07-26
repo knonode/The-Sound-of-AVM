@@ -137,9 +137,9 @@ export const GUIDE_SECTIONS = [
       <em>clawback</em>.</p>
       <p>Whatever you pick then decides what appears in this box, and that's your filter:</p>
       <ul>
-        <li><strong>Min / Max</strong> for anything with a range, like an amount or a
+        <li><strong>Min</strong> and <strong>Max</strong> for anything with a range, like an amount or a
         group size. Leave them empty to accept everything.</li>
-        <li><strong>An address box</strong> for sender/receiver subtypes — only that
+        <li><strong>An address box</strong> for the sender and receiver subtypes — only that
         account triggers the sound.</li>
         <li><strong>An asset box</strong> that searches by name as well as by ID, so you
         can type <em>USDC</em> instead of looking the number up.</li>
@@ -165,7 +165,7 @@ export const GUIDE_SECTIONS = [
       box searches <em>by name</em>. Start typing <em>USDC</em> and pick it from the list
       — no need to go and look the ID up.</p>
       <p>This is how you make a synth that only sounds when one particular token moves.
-      Pair it with <em>group / asset</em> instead of <em>axfer</em> and you'll catch it
+      Pair it with <em>group</em> &rarr; <em>asset</em> instead of <em>axfer</em> and you'll catch it
       being swapped on a DEX, too.</p>
     `,
   },

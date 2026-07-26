@@ -46,8 +46,12 @@ const STATES = {
     await clickIn(page, '.tab-btn[data-tab="filterenv"]')
   },
 
-  // Master is injected at boot; nothing to do.
-  master: async () => {},
+  // Master is injected at boot, but .synth-grid uses auto-fit: a lone card
+  // stretches across the whole window. A second card gives it a normal track.
+  master: async (page) => {
+    await page.click('#add-synth')
+    await page.waitForSelector(card)
+  },
 
   presets: async (page) => {
     await page.click('#load-preset')
@@ -79,7 +83,7 @@ async function clickIn(page, selector) {
 async function main() {
   // Grouped by viewport width so the browser page is rebuilt once per width,
   // not once per section. Capture order is otherwise irrelevant.
-  const shots = GUIDE_SECTIONS.filter((s) => s.selector).sort((a, b) => (a.viewport ?? 1280) - (b.viewport ?? 1280))
+  const shots = GUIDE_SECTIONS.filter((s) => s.selector).sort((a, b) => (a.viewport ?? 700) - (b.viewport ?? 700))
   if (!shots.length) {
     console.error('No sections with a selector — nothing to capture.')
     process.exit(1)
@@ -120,10 +124,12 @@ async function main() {
       continue
     }
 
-    // Full-width bars shrink to an illegible sliver when a 1280px crop is scaled
-    // down into the modal, so they're shot in a narrower window. Cards are
-    // already narrow and want the roomy layout.
-    const width = section.viewport ?? 1280
+    // Synth cards are captured in a narrow window on purpose. .synth-grid is
+    // auto-fit, so in a wide window two cards stretch to half the screen each and
+    // the crop ends up a wide, sparse band that shrinks to nothing in the modal.
+    // 700px gives a card its natural ~337px, leaving room for text beside it.
+    // Full-width bars override this (see `viewport` in guide-sections.js).
+    const width = section.viewport ?? 700
     if (width !== pageWidth) {
       if (page) await page.close()
       page = await browser.newPage({
@@ -136,11 +142,11 @@ async function main() {
     try {
       await page.goto(URL, { waitUntil: 'domcontentloaded' })
       await page.waitForSelector('.top-bar')
-      // The banner is a first-visit artefact; it would sit in the middle of the
-      // page shots and date them immediately.
+      // The first-visit card is a full-screen overlay: it would cover every shot
+      // and swallow the clicks the setup routines need.
       await page.evaluate(() => {
         const b = document.getElementById('version-banner')
-        if (b) b.hidden = true
+        if (b) b.style.display = 'none'
       })
       await setup(page)
 

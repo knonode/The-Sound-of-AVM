@@ -994,25 +994,44 @@
             border-radius: 2px;
         }
 
+        /* A synth card shot is ~340px wide, which leaves room for the explanation
+           beside it rather than under it. Wrapping (not a media query) handles
+           narrow screens: the text hits its min-width and drops below. */
         .guide-step {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 4px 16px;
             margin: 0 0 22px;
             padding-bottom: 18px;
             border-bottom: 1px solid #004444;
         }
         .guide-step:last-child { border-bottom: none; }
         .guide-step h3 {
+            flex: 1 1 100%; /* heading always owns its own row */
             margin: 0 0 8px;
             font-size: 13px;
             color: #00cccc;
         }
         .guide-step img {
             display: block;
+            flex: 0 0 auto;
             max-width: 100%;
-            margin: 0 0 10px;
+            width: 340px;
+            height: auto;
             border: 1px solid #006666;
             border-radius: 4px;
             background-color: rgba(0, 26, 26, 0.6);
         }
+        .guide-step .guide-text {
+            flex: 1 1 260px;
+            min-width: 0; /* let it shrink to its flex-basis instead of overflowing */
+        }
+        .guide-step .guide-text > :last-child { margin-bottom: 0; }
+
+        /* Full-width bars can't be squeezed into a 340px column. */
+        .guide-step-wide img { width: 100%; }
+        .guide-step-wide .guide-text { flex: 1 1 100%; margin-top: 10px; }
 
         .changelog-entry { margin-bottom: 18px; }
         .changelog-entry h3 {
@@ -1026,6 +1045,27 @@
             font-weight: normal;
         }
 
+        /* Tailwind's preflight strips list-style from every ul, so an unstyled
+           list here renders as unmarked paragraphs that run together. Dashes
+           rather than restoring bullets — they suit the monospace face. */
+        .info-pane ul,
+        .changelog-entry ul,
+        .version-modal .banner-text ul {
+            list-style: none;
+            padding-left: 12px;
+        }
+        .info-pane li,
+        .changelog-entry li,
+        .version-modal .banner-text li {
+            padding-left: 10px;
+            text-indent: -10px; /* wrapped lines align under the text, not the dash */
+        }
+        .info-pane li::before,
+        .changelog-entry li::before,
+        .version-modal .banner-text li::before {
+            content: '- ';
+            color: #00cccc;
+        }
 
         /* <<< NEW: Style for the Master Synth >>> */
         .master-synth {

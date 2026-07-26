@@ -1657,11 +1657,14 @@ function buildInfoPanes() {
 
     const howto = document.querySelector('[data-info-pane="howto"]');
     if (howto) {
+        // Sections that declare a `viewport` are the full-width bars: their shot
+        // spans the row with the text underneath. Everything else is a synth card
+        // narrow enough to sit beside its explanation.
         howto.innerHTML = GUIDE_SECTIONS.map(section => `
-            <div class="guide-step">
+            <div class="guide-step${section.viewport ? ' guide-step-wide' : ''}">
                 <h3>${section.title}</h3>
                 ${section.selector ? `<img src="/guide/${section.id}.png" alt="${section.title}" loading="lazy">` : ''}
-                ${section.body}
+                <div class="guide-text">${section.body}</div>
             </div>
         `).join('');
     }
