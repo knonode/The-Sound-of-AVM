@@ -11,7 +11,7 @@ export const CHANGELOG = [
     date: '2026-07-26',
     // Keep these short — they're read in a one-line banner as often as in the modal.
     highlights: [
-      'First numbered release. The version now shows in the footer, and this banner will tell you what changed on each new one.',
+      'First numbered release. The version now shows in the footer, and this card will tell you what changed on each new one.',
       'A how-to guide, in the (i) beside the title — every control on a synth, in the order you would reach for it.',
       'Territory visualization: every transaction claims its share of the screen and squeezes the standing ground aside.',
       'Kintsugi Ledger and Music Box visualizations.',

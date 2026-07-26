@@ -933,6 +933,14 @@
             padding-right: 24px; /* first line must clear the absolute close X */
         }
         .version-modal .banner-text strong { color: #00cccc; }
+        .version-modal .banner-intro { margin: 0; }
+        /* Sits between the intro and the release notes on the same card. */
+        .version-modal .banner-whatsnew {
+            margin: 14px 0 0;
+            padding-top: 12px;
+            border-top: 1px solid #005555;
+            color: #00cccc;
+        }
         .version-modal .banner-text ul {
             margin: 8px 0 0;
             padding-left: 12px;

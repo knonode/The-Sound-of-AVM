@@ -1733,8 +1733,7 @@ function isVersionBannerOpen() {
 function maybeShowVersionBanner() {
     const banner = document.getElementById('version-banner');
     const textEl = document.getElementById('version-banner-text');
-    const linkEl = document.getElementById('version-banner-link');
-    if (!banner || !textEl || !linkEl) return;
+    if (!banner || !textEl) return;
 
     let lastSeen = null;
     try {
@@ -1745,26 +1744,24 @@ function maybeShowVersionBanner() {
 
     if (lastSeen === APP_VERSION) return; // already caught up
 
-    let tab;
-    if (lastSeen === null) {
-        // First visit: a changelog means nothing without a baseline, so point
-        // them at the guide instead. A bare page load brings up only the master
-        // bus, so loading a preset is the actual first step, not pressing Start.
-        textEl.innerHTML =
-            '<strong>Algorand mempool sonification and visualisation.</strong> ' +
-            'Load a preset and press Start or read how to build your own.';
-        linkEl.textContent = 'How it works';
-        tab = 'howto';
-    } else {
-        const latest = CHANGELOG[0];
-        textEl.innerHTML =
-            `<strong>What's new in v${latest.version}</strong>` +
+    // One card for everybody who isn't caught up, whether that's a first-ever
+    // visit or a returning user on an older version: what the app is, then what
+    // changed. No point deciding which of the two they need — both are short.
+    //
+    // A bare page load brings up only the master bus, so loading a preset is the
+    // actual first step, not pressing Start.
+    const latest = CHANGELOG[0];
+    let html =
+        '<p class="banner-intro"><strong>Algorand mempool sonification and visualisation.</strong> ' +
+        'Load a preset and press Start or read how to build your own.</p>';
+
+    if (latest?.highlights?.length) {
+        html +=
+            `<p class="banner-whatsnew">What's new in v${latest.version}</p>` +
             `<ul>${latest.highlights.slice(0, 3).map(h => `<li>${h}</li>`).join('')}</ul>`;
-        linkEl.textContent = 'Full changelog';
-        tab = 'changelog';
     }
 
-    linkEl.onclick = () => openInfoModal(tab);
+    textEl.innerHTML = html;
     banner.style.display = 'block';
 }
 
@@ -1991,6 +1988,8 @@ export async function bootLegacySynth() {
       if (tab) showInfoTab(tab);
   });
   document.getElementById('version-banner-dismiss').addEventListener('click', dismissVersionBanner);
+  document.getElementById('version-banner-link').addEventListener('click', () => openInfoModal('howto'));
+  document.getElementById('version-banner-changelog').addEventListener('click', () => openInfoModal('changelog'));
 
   // Listener for buttons inside the load modal
   modalPresetButtons.addEventListener('click', (event) => {

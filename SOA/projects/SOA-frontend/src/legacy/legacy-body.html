@@ -84,14 +84,15 @@
         <div id="territory-root"></div>
     </div>
 
-    <!-- Shown once per version, and once as a welcome on a first visit. A centred
-         card like the preset modals; filled and revealed by maybeShowVersionBanner(). -->
+    <!-- Shown once per version: what the app is, plus what changed in this release.
+         A centred card like the preset modals; filled by maybeShowVersionBanner(). -->
     <div id="version-banner" class="legacy-modal version-modal">
         <div class="modal-content">
             <span class="modal-close" id="version-banner-dismiss">&times;</span>
             <div class="banner-text" id="version-banner-text"></div>
             <div class="modal-buttons">
-                <button class="banner-link" id="version-banner-link"></button>
+                <button class="banner-link" id="version-banner-link">How it works</button>
+                <button class="banner-link" id="version-banner-changelog">Full changelog</button>
             </div>
         </div>
     </div>
