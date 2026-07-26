@@ -57,6 +57,7 @@
     "build": "tsc && vite build",
     "test": "jest --coverage --passWithNoTests",
     "playwright:test": "playwright test",
+    "guide:shots": "node scripts/capture-guide-shots.mjs",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0 --fix",
     "ci:vercel:build": "vercel build --prod --token=$VERCEL_TOKEN",
