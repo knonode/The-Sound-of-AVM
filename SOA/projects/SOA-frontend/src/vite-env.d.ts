@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** App version, injected from package.json by the `define` block in vite.config.ts. */
+declare const __APP_VERSION__: string
+
 interface ImportMetaEnv {
   readonly VITE_ENVIRONMENT: string
 

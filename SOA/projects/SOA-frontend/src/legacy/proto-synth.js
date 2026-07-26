@@ -13,6 +13,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 import * as Tone from 'tone';
 import GossipAPI from '../services/gossip';
+import { APP_VERSION } from './app-version.js';
 import { initXenakisViz, vizAddTx, vizAddBlock } from './xenakis-viz.js';
 import { initLoomViz, loomAddTx, loomAddBlock } from './loom-viz.js';
 import { initKintsugiViz, kintsugiAddTx, kintsugiAddBlock } from './kintsugi-viz.js';
@@ -1951,6 +1952,9 @@ export async function bootLegacySynth() {
   initializeTypeCounts();
   injectSliderStyles();
   loadPersistentCounters();
+
+  const footerVersion = document.getElementById('footer-version');
+  if (footerVersion) footerVersion.textContent = `v${APP_VERSION}`;
 
   // Deep links from shared URLs: /<name> loads a premade server preset,
   // /<digits> loads a minted NFT preset by asset id (indexer lookup —
