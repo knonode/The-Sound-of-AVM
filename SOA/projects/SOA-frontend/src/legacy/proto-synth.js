@@ -1719,7 +1719,12 @@ function dismissVersionBanner() {
         console.warn('Could not record last seen version:', error);
     }
     const banner = document.getElementById('version-banner');
-    if (banner) banner.hidden = true;
+    if (banner) banner.style.display = 'none';
+}
+
+function isVersionBannerOpen() {
+    const banner = document.getElementById('version-banner');
+    return !!banner && banner.style.display === 'block';
 }
 
 function maybeShowVersionBanner() {
@@ -1740,10 +1745,11 @@ function maybeShowVersionBanner() {
     let tab;
     if (lastSeen === null) {
         // First visit: a changelog means nothing without a baseline, so point
-        // them at the guide instead.
+        // them at the guide instead. A bare page load brings up only the master
+        // bus, so loading a preset is the actual first step, not pressing Start.
         textEl.innerHTML =
-            '<strong>New here?</strong> This turns live Algorand mempool traffic into sound — ' +
-            'every note is a real transaction. Press Start to listen, or read how to build your own.';
+            '<strong>Algorand mempool sonification and visualisation.</strong> ' +
+            'Load a preset and press Start or read how to build your own.';
         linkEl.textContent = 'How it works';
         tab = 'howto';
     } else {
@@ -1756,7 +1762,7 @@ function maybeShowVersionBanner() {
     }
 
     linkEl.onclick = () => openInfoModal(tab);
-    banner.hidden = false;
+    banner.style.display = 'block';
 }
 
 // Boot the synth once its markup is in the DOM (called from React)
@@ -1783,6 +1789,7 @@ export async function bootLegacySynth() {
   const infoBtn = document.getElementById('info-btn');
   const infoModal = document.getElementById('info-modal');
   const infoModalClose = document.getElementById('info-modal-close');
+  const versionBanner = document.getElementById('version-banner');
   const saveOverwriteBtn = document.getElementById('save-overwrite-btn');
   const saveAsBtn = document.getElementById('save-as-btn');
   const saveCopyBtn = document.getElementById('save-copy-btn');
@@ -1970,6 +1977,7 @@ export async function bootLegacySynth() {
       if (event.target == loadModal) loadModal.style.display = 'none';
       if (event.target == saveModal) saveModal.style.display = 'none';
       if (event.target == infoModal) closeInfoModal();
+      if (event.target == versionBanner) dismissVersionBanner();
   });
 
   // --- INFO MODAL + VERSION BANNER LISTENERS ---
@@ -2072,11 +2080,12 @@ export async function bootLegacySynth() {
       // The info modal sits on top of everything, so it gets first refusal on
       // Escape — otherwise this would close a viz the user can't even see.
       if (e.key === 'Escape' && isInfoModalOpen()) { closeInfoModal(); return; }
+      if (e.key === 'Escape' && isVersionBannerOpen()) { dismissVersionBanner(); return; }
       if (e.key === 'Escape') { closeViz(); return; }
       if (e.code !== 'Space') return;
       // Reading the guide is not a cue to start playing. Buttons don't exempt
-      // themselves from the rule below, and the modal is full of them.
-      if (isInfoModalOpen()) return;
+      // themselves from the rule below, and the modals are full of them.
+      if (isInfoModalOpen() || isVersionBannerOpen()) return;
       const el = document.activeElement;
       const tag = el?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;

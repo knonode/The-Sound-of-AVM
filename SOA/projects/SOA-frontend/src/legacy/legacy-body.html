@@ -15,14 +15,6 @@
         </div>
     </div>
 
-    <!-- Shown once per version (and once as a welcome on a first visit); filled and
-         revealed by maybeShowVersionBanner(). Starts hidden so it never flashes. -->
-    <div id="version-banner" class="version-banner" hidden>
-        <div class="banner-text" id="version-banner-text"></div>
-        <button class="banner-link" id="version-banner-link"></button>
-        <button class="banner-dismiss" id="version-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
-    </div>
-
     <div class="actions-bar">
         <div class="viz-bar">
             <button class="api-btn viz-btn" data-viz="score" title="The Score">Score</button>
@@ -90,6 +82,18 @@
     </div>
     <div class="viz-container" id="viz-territory" style="display: none;">
         <div id="territory-root"></div>
+    </div>
+
+    <!-- Shown once per version, and once as a welcome on a first visit. A centred
+         card like the preset modals; filled and revealed by maybeShowVersionBanner(). -->
+    <div id="version-banner" class="legacy-modal version-modal">
+        <div class="modal-content">
+            <span class="modal-close" id="version-banner-dismiss">&times;</span>
+            <div class="banner-text" id="version-banner-text"></div>
+            <div class="modal-buttons">
+                <button class="banner-link" id="version-banner-link"></button>
+            </div>
+        </div>
     </div>
 
     <!-- Info modal: how-to guide + changelog. Panes are built on first open

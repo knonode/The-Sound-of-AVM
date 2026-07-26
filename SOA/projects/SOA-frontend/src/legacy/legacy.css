@@ -922,50 +922,28 @@
             color: #eee;
         }
 
-        .version-banner {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 6px 0;
-            padding: 6px 10px;
-            background-color: rgba(0, 60, 60, 0.55);
-            border: 1px solid #006666;
-            border-radius: 4px;
-            font-size: 11px;
+        /* Same centred card as the preset modals, just narrower. */
+        .version-modal .modal-content {
+            max-width: 420px;
+            padding-top: 26px; /* clear of the close X */
         }
-        .version-banner[hidden] { display: none; } /* beat the flex above */
-        /* min-width:0 so long copy wraps inside the banner instead of shoving
-           the link and the dismiss X off the right edge */
-        .version-banner .banner-text {
-            flex: 1 1 auto;
-            min-width: 0;
-            line-height: 1.5;
+        .version-modal .banner-text {
+            font-size: 12px;
+            line-height: 1.6;
+            padding-right: 24px; /* first line must clear the absolute close X */
         }
-        .version-banner .banner-text strong { color: #00cccc; }
-        .version-banner .banner-text ul {
-            margin: 4px 0 0;
-            padding-left: 16px;
+        .version-modal .banner-text strong { color: #00cccc; }
+        .version-modal .banner-text ul {
+            margin: 8px 0 0;
+            padding-left: 12px;
+            list-style: none; /* replaced by the dash below */
         }
-        .version-banner .banner-link {
-            flex: 0 0 auto;
-            padding: 3px 8px;
-            background-color: #004d4d;
-            border: 1px solid #009999;
-            font-size: 11px;
-            white-space: nowrap;
+        .version-modal .banner-text li {
+            margin-bottom: 5px;
+            text-indent: -10px; /* wrapped lines align under the text, not the dash */
+            padding-left: 10px;
         }
-        .version-banner .banner-dismiss {
-            flex: 0 0 auto;
-            padding: 0;
-            width: 22px;
-            background: none;
-            border: none;
-            color: #aaa;
-            font-size: 18px;
-            line-height: 1;
-            cursor: pointer;
-        }
-        .version-banner .banner-dismiss:hover { color: #eee; }
+        .version-modal .modal-buttons { margin-top: 16px; }
 
         /* The shared .modal-content caps at 450px, which is far too narrow for
            the guide screenshots — widen just this one and let it scroll. */
@@ -1047,6 +1025,7 @@
             font-size: 11px;
             font-weight: normal;
         }
+
 
         /* <<< NEW: Style for the Master Synth >>> */
         .master-synth {
