@@ -1,4 +1,6 @@
 {
+    "formatVersion": 1,
+    "appVersion": "0.9.0",
     "activeSynths": [
         {
             "id": "lofi2-block-breathinghorizon",

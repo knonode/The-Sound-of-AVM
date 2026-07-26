@@ -1431,6 +1431,8 @@ async function loadPresetFromSource(source, { deferAudio = false } = {}) {
             throw new Error('Preset file is missing "activeSynths" array.');
         }
 
+        readPresetProvenance(presetData, presetName);
+
         // Clear Current State - more surgically
         const regularSynths = activeSynths.filter(s => s.id !== 'master');
         regularSynths.forEach(instance => {
@@ -1513,8 +1515,60 @@ function setPresetUrl(slug) {
     } catch { /* best-effort; never break a preset load over the URL */ }
 }
 
+// --- PRESET PROVENANCE ---
+//
+// Two different questions, so two fields:
+//
+//   formatVersion - the shape of the preset object. Bump only when a reader has
+//                   to behave differently to parse it. Adding a settings key
+//                   with a sensible default is not a bump.
+//   appVersion    - which build wrote it. This is the one that matters for
+//                   sound: swapping a synth engine or a reverb changes how an
+//                   existing preset renders without touching the schema at all,
+//                   so formatVersion would not move. Keeping the old code path
+//                   alive for old presets requires knowing which they are.
+//
+// Presets minted as NFPresets are immutable on-chain: anything minted before
+// this existed can never be stamped retroactively.
+const PRESET_FORMAT_VERSION = 1;
+
+// Provenance of whatever is currently loaded, for future compatibility branches.
+let loadedPresetProvenance = null;
+
+/**
+ * What wrote the preset that's currently loaded, or null if none has been.
+ * `legacy: true` means it predates stamping — treat it as "before any change
+ * you are about to branch on". This is the hook for keeping an old engine or
+ * effect alive for presets that were voiced against it.
+ */
+export function getLoadedPresetProvenance() {
+    return loadedPresetProvenance;
+}
+
+function readPresetProvenance(presetData, label = 'preset') {
+    // An absent formatVersion means the preset predates stamping — which is
+    // exactly the set of presets written before any future behaviour change.
+    // The absence is itself the signal, so nothing already saved needs migrating.
+    const provenance = {
+        formatVersion: presetData?.formatVersion ?? 0,
+        appVersion: presetData?.appVersion ?? null,
+        legacy: presetData?.formatVersion === undefined,
+    };
+
+    if (provenance.formatVersion > PRESET_FORMAT_VERSION) {
+        // Forward compatibility: a stale cached build meeting a newer preset.
+        // Load it anyway — unknown keys are ignored — but say so.
+        updateStatus(`"${label}" was saved by a newer version (format ${provenance.formatVersion}) — loading anyway`);
+    }
+
+    loadedPresetProvenance = provenance;
+    return provenance;
+}
+
 function writePreset(presetName, download) {
     const presetData = {
+        formatVersion: PRESET_FORMAT_VERSION,
+        appVersion: APP_VERSION,
         activeSynths: activeSynths.filter(instance => instance.id !== 'master').map(instance => ({
             id: instance.id,
             config: instance.config,
@@ -3536,6 +3590,7 @@ const loadPresetFromLocalStorage = async (presetNameToLoad) => {
   }
 
   console.log(`Loading preset: ${presetName} (from local storage)`);
+  readPresetProvenance(loadedData, presetName);
 
   // --- Clear Current State more surgically ---
   console.log("Clearing current synths and UI...");
@@ -3678,6 +3733,9 @@ function loadNftPreset(presetData) {
     }
 
     console.log(`Loading NFT preset with ${presetData.activeSynths.length} synths`);
+    // Minted before stamping existed reads as legacy, permanently — the asset
+    // is on-chain and cannot be re-stamped.
+    readPresetProvenance(presetData, 'NFPreset');
 
     // Clear Current State - more surgically
     const regularSynths = activeSynths.filter(s => s.id !== 'master');
