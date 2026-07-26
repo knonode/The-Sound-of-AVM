@@ -1,5 +1,10 @@
     <div class="top-bar">
-        <h1>Algorand TX Sonifier</h1>
+        <!-- .top-bar is a two-end flex; the info button rides along with the title
+             inside .title-group rather than becoming a third child that floats. -->
+        <div class="title-group">
+            <h1>Algorand TX Sonifier</h1>
+            <button id="info-btn" class="info-btn" title="How it works &amp; what's new" aria-label="How it works and what's new">i</button>
+        </div>
         <div class="controls">
             <button id="start-btn">Start</button>
             <button id="stop-btn">Stop</button>
@@ -8,6 +13,14 @@
             <button id="load-preset">Load Preset</button>
             <button id="wallet-connect">Wallet</button>
         </div>
+    </div>
+
+    <!-- Shown once per version (and once as a welcome on a first visit); filled and
+         revealed by maybeShowVersionBanner(). Starts hidden so it never flashes. -->
+    <div id="version-banner" class="version-banner" hidden>
+        <div class="banner-text" id="version-banner-text"></div>
+        <button class="banner-link" id="version-banner-link"></button>
+        <button class="banner-dismiss" id="version-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
     </div>
 
     <div class="actions-bar">
@@ -77,6 +90,21 @@
     </div>
     <div class="viz-container" id="viz-territory" style="display: none;">
         <div id="territory-root"></div>
+    </div>
+
+    <!-- Info modal: how-to guide + changelog. Panes are built on first open
+         (see buildInfoPanes) so the guide screenshots cost nothing on page load. -->
+    <div id="info-modal" class="legacy-modal info-modal">
+        <div class="modal-content">
+            <span class="modal-close" id="info-modal-close">&times;</span>
+            <h2>The Sound of AVM <span id="info-version" class="info-version"></span></h2>
+            <div class="info-tabs">
+                <button class="info-tab-btn active" data-info-tab="howto">How it works</button>
+                <button class="info-tab-btn" data-info-tab="changelog">What's new</button>
+            </div>
+            <div class="info-pane" data-info-pane="howto"></div>
+            <div class="info-pane" data-info-pane="changelog" style="display: none;"></div>
+        </div>
     </div>
 
     <!-- Modal for Loading Presets -->

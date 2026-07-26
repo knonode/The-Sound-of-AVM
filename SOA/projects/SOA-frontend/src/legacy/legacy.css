@@ -887,6 +887,167 @@
             font-size: 16px;
         }
 
+        /* --- Info button, version banner, info modal ---
+           Deliberately distinct class names (.info-tab-btn, not .tab-btn;
+           .info-pane, not .tab-content) so nothing here collides with the synth
+           card's own tab strip or with DaisyUI. */
+
+        /* The title and its (i) travel together as one flex child, leaving
+           .top-bar's space-between with the two ends it expects. */
+        .title-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .info-btn {
+            width: 18px;
+            height: 18px;
+            padding: 0;
+            border-radius: 50%;
+            background-color: #003333;
+            color: #00cccc;
+            border: 1px solid #009999;
+            font-size: 11px;
+            font-style: italic;
+            font-weight: bold;
+            line-height: 1;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .info-btn:hover {
+            background-color: #004444;
+            border-color: #00cccc;
+            color: #eee;
+        }
+
+        .version-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 6px 0;
+            padding: 6px 10px;
+            background-color: rgba(0, 60, 60, 0.55);
+            border: 1px solid #006666;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .version-banner[hidden] { display: none; } /* beat the flex above */
+        /* min-width:0 so long copy wraps inside the banner instead of shoving
+           the link and the dismiss X off the right edge */
+        .version-banner .banner-text {
+            flex: 1 1 auto;
+            min-width: 0;
+            line-height: 1.5;
+        }
+        .version-banner .banner-text strong { color: #00cccc; }
+        .version-banner .banner-text ul {
+            margin: 4px 0 0;
+            padding-left: 16px;
+        }
+        .version-banner .banner-link {
+            flex: 0 0 auto;
+            padding: 3px 8px;
+            background-color: #004d4d;
+            border: 1px solid #009999;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .version-banner .banner-dismiss {
+            flex: 0 0 auto;
+            padding: 0;
+            width: 22px;
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .version-banner .banner-dismiss:hover { color: #eee; }
+
+        /* The shared .modal-content caps at 450px, which is far too narrow for
+           the guide screenshots — widen just this one and let it scroll. */
+        .info-modal .modal-content {
+            width: 92%;
+            max-width: 760px;
+            max-height: 82vh;
+            overflow-y: auto;
+            margin: 3% auto;
+        }
+        .info-modal .info-version {
+            font-size: 12px;
+            color: #aaa;
+            font-weight: normal;
+        }
+
+        .info-tabs {
+            display: flex;
+            gap: 2px;
+            margin: 12px 0;
+            border-bottom: 1px solid #006666;
+        }
+        .info-tab-btn {
+            padding: 5px 12px;
+            background-color: #003333;
+            color: #00cccc;
+            border: 1px solid #006666;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .info-tab-btn:hover { background-color: #004444; }
+        .info-tab-btn.active {
+            background-color: #005555;
+            color: #eee;
+            border-color: #00aaaa;
+        }
+
+        .info-pane { font-size: 12px; line-height: 1.6; }
+        .info-pane p { margin: 0 0 8px; }
+        .info-pane ul { margin: 0 0 8px; padding-left: 18px; }
+        .info-pane li { margin-bottom: 3px; }
+        .info-pane strong { color: #00cccc; }
+        .info-pane code {
+            background-color: #003333;
+            padding: 0 3px;
+            border-radius: 2px;
+        }
+
+        .guide-step {
+            margin: 0 0 22px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid #004444;
+        }
+        .guide-step:last-child { border-bottom: none; }
+        .guide-step h3 {
+            margin: 0 0 8px;
+            font-size: 13px;
+            color: #00cccc;
+        }
+        .guide-step img {
+            display: block;
+            max-width: 100%;
+            margin: 0 0 10px;
+            border: 1px solid #006666;
+            border-radius: 4px;
+            background-color: rgba(0, 26, 26, 0.6);
+        }
+
+        .changelog-entry { margin-bottom: 18px; }
+        .changelog-entry h3 {
+            margin: 0 0 6px;
+            font-size: 13px;
+            color: #00cccc;
+        }
+        .changelog-entry .changelog-date {
+            color: #aaa;
+            font-size: 11px;
+            font-weight: normal;
+        }
+
         /* <<< NEW: Style for the Master Synth >>> */
         .master-synth {
             border: 2px solid #010e0b; /* A bright, distinct border */

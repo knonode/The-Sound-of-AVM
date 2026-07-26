@@ -14,6 +14,8 @@ window.addEventListener('unhandledrejection', (event) => {
 import * as Tone from 'tone';
 import GossipAPI from '../services/gossip';
 import { APP_VERSION } from './app-version.js';
+import { CHANGELOG } from './changelog.js';
+import { GUIDE_SECTIONS } from './guide-sections.js';
 import { initXenakisViz, vizAddTx, vizAddBlock } from './xenakis-viz.js';
 import { initLoomViz, loomAddTx, loomAddBlock } from './loom-viz.js';
 import { initKintsugiViz, kintsugiAddTx, kintsugiAddBlock } from './kintsugi-viz.js';
@@ -1641,6 +1643,122 @@ window.addEventListener('message', (e) => {
   }
 });
 
+// --- INFO MODAL: how-to guide + changelog ---
+
+const LAST_SEEN_VERSION_KEY = 'txSynthLastSeenVersion';
+
+// Built on first open rather than at boot, so the guide screenshots aren't
+// fetched by visitors who never open the modal.
+let infoPanesBuilt = false;
+
+function buildInfoPanes() {
+    if (infoPanesBuilt) return;
+    infoPanesBuilt = true;
+
+    const howto = document.querySelector('[data-info-pane="howto"]');
+    if (howto) {
+        howto.innerHTML = GUIDE_SECTIONS.map(section => `
+            <div class="guide-step">
+                <h3>${section.title}</h3>
+                ${section.selector ? `<img src="/guide/${section.id}.png" alt="${section.title}" loading="lazy">` : ''}
+                ${section.body}
+            </div>
+        `).join('');
+    }
+
+    const changelog = document.querySelector('[data-info-pane="changelog"]');
+    if (changelog) {
+        changelog.innerHTML = CHANGELOG.map(entry => `
+            <div class="changelog-entry">
+                <h3>v${entry.version} <span class="changelog-date">${entry.date}</span></h3>
+                <ul>${entry.highlights.map(h => `<li>${h}</li>`).join('')}</ul>
+            </div>
+        `).join('');
+    }
+}
+
+function showInfoTab(tab) {
+    document.querySelectorAll('.info-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.infoTab === tab);
+    });
+    document.querySelectorAll('.info-pane').forEach(pane => {
+        pane.style.display = pane.dataset.infoPane === tab ? 'block' : 'none';
+    });
+}
+
+function isInfoModalOpen() {
+    const modal = document.getElementById('info-modal');
+    return !!modal && modal.style.display === 'block';
+}
+
+function openInfoModal(tab = 'howto') {
+    buildInfoPanes();
+    showInfoTab(tab);
+    const modal = document.getElementById('info-modal');
+    if (modal) modal.scrollTop = 0;
+    const content = modal?.querySelector('.modal-content');
+    if (content) content.scrollTop = 0;
+    if (modal) modal.style.display = 'block';
+    // Opening the guide counts as having seen this version.
+    dismissVersionBanner();
+}
+
+function closeInfoModal() {
+    const modal = document.getElementById('info-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+// --- VERSION BANNER: shown once per version, then never again ---
+
+function dismissVersionBanner() {
+    try {
+        localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
+    } catch (error) {
+        // Private browsing can refuse writes; the banner still closes for this
+        // session, it just comes back next time. Not worth bothering the user.
+        console.warn('Could not record last seen version:', error);
+    }
+    const banner = document.getElementById('version-banner');
+    if (banner) banner.hidden = true;
+}
+
+function maybeShowVersionBanner() {
+    const banner = document.getElementById('version-banner');
+    const textEl = document.getElementById('version-banner-text');
+    const linkEl = document.getElementById('version-banner-link');
+    if (!banner || !textEl || !linkEl) return;
+
+    let lastSeen = null;
+    try {
+        lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY);
+    } catch (error) {
+        console.warn('Could not read last seen version:', error);
+    }
+
+    if (lastSeen === APP_VERSION) return; // already caught up
+
+    let tab;
+    if (lastSeen === null) {
+        // First visit: a changelog means nothing without a baseline, so point
+        // them at the guide instead.
+        textEl.innerHTML =
+            '<strong>New here?</strong> This turns live Algorand mempool traffic into sound — ' +
+            'every note is a real transaction. Press Start to listen, or read how to build your own.';
+        linkEl.textContent = 'How it works';
+        tab = 'howto';
+    } else {
+        const latest = CHANGELOG[0];
+        textEl.innerHTML =
+            `<strong>What's new in v${latest.version}</strong>` +
+            `<ul>${latest.highlights.slice(0, 3).map(h => `<li>${h}</li>`).join('')}</ul>`;
+        linkEl.textContent = 'Full changelog';
+        tab = 'changelog';
+    }
+
+    linkEl.onclick = () => openInfoModal(tab);
+    banner.hidden = false;
+}
+
 // Boot the synth once its markup is in the DOM (called from React)
 let legacySynthBooted = false;
 export async function bootLegacySynth() {
@@ -1662,6 +1780,9 @@ export async function bootLegacySynth() {
   const modalPresetButtons = document.getElementById('modal-preset-buttons');
   const saveModalClose = document.getElementById('save-modal-close');
   const loadModalClose = document.getElementById('load-modal-close');
+  const infoBtn = document.getElementById('info-btn');
+  const infoModal = document.getElementById('info-modal');
+  const infoModalClose = document.getElementById('info-modal-close');
   const saveOverwriteBtn = document.getElementById('save-overwrite-btn');
   const saveAsBtn = document.getElementById('save-as-btn');
   const saveCopyBtn = document.getElementById('save-copy-btn');
@@ -1848,7 +1969,17 @@ export async function bootLegacySynth() {
   window.addEventListener('click', (event) => {
       if (event.target == loadModal) loadModal.style.display = 'none';
       if (event.target == saveModal) saveModal.style.display = 'none';
+      if (event.target == infoModal) closeInfoModal();
   });
+
+  // --- INFO MODAL + VERSION BANNER LISTENERS ---
+  infoBtn.addEventListener('click', () => openInfoModal('howto'));
+  infoModalClose.addEventListener('click', closeInfoModal);
+  infoModal.querySelector('.info-tabs').addEventListener('click', (event) => {
+      const tab = event.target.dataset.infoTab;
+      if (tab) showInfoTab(tab);
+  });
+  document.getElementById('version-banner-dismiss').addEventListener('click', dismissVersionBanner);
 
   // Listener for buttons inside the load modal
   modalPresetButtons.addEventListener('click', (event) => {
@@ -1938,8 +2069,14 @@ export async function bootLegacySynth() {
   // literal space must still work; a focused button does NOT exempt it
   // (Enter remains available for keyboard button activation).
   document.addEventListener('keydown', (e) => {
+      // The info modal sits on top of everything, so it gets first refusal on
+      // Escape — otherwise this would close a viz the user can't even see.
+      if (e.key === 'Escape' && isInfoModalOpen()) { closeInfoModal(); return; }
       if (e.key === 'Escape') { closeViz(); return; }
       if (e.code !== 'Space') return;
+      // Reading the guide is not a cue to start playing. Buttons don't exempt
+      // themselves from the rule below, and the modal is full of them.
+      if (isInfoModalOpen()) return;
       const el = document.activeElement;
       const tag = el?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
@@ -1955,6 +2092,9 @@ export async function bootLegacySynth() {
 
   const footerVersion = document.getElementById('footer-version');
   if (footerVersion) footerVersion.textContent = `v${APP_VERSION}`;
+  const infoVersion = document.getElementById('info-version');
+  if (infoVersion) infoVersion.textContent = `v${APP_VERSION}`;
+  maybeShowVersionBanner();
 
   // Deep links from shared URLs: /<name> loads a premade server preset,
   // /<digits> loads a minted NFT preset by asset id (indexer lookup —
