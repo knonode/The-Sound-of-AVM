@@ -1532,27 +1532,41 @@ function setPresetUrl(slug) {
 // this existed can never be stamped retroactively.
 const PRESET_FORMAT_VERSION = 1;
 
+// What an unstamped preset is assumed to have been written by. Everything
+// without a stamp necessarily predates stamping, and stamping landed in 0.9.0 —
+// so every such preset was authored against 0.9.0-era synths and sounds right on
+// them today. Treating them as 0.9.0 is therefore a statement of fact, not a
+// guess, and it means appVersion is never null for callers to special-case.
+// The `inferred` flag below keeps the distinction available for diagnostics.
+const PRESET_BASELINE_VERSION = '0.9.0';
+
 // Provenance of whatever is currently loaded, for future compatibility branches.
 let loadedPresetProvenance = null;
 
 /**
  * What wrote the preset that's currently loaded, or null if none has been.
- * `legacy: true` means it predates stamping — treat it as "before any change
- * you are about to branch on". This is the hook for keeping an old engine or
- * effect alive for presets that were voiced against it.
+ *
+ * `appVersion` is always a version string — unstamped presets read as the
+ * baseline (see PRESET_BASELINE_VERSION), so a caller can compare without a null
+ * case. `inferred: true` means it carried no stamp and the baseline was assumed.
+ *
+ * This is the hook for keeping an old engine or effect alive for presets that
+ * were voiced against it.
  */
 export function getLoadedPresetProvenance() {
     return loadedPresetProvenance;
 }
 
 function readPresetProvenance(presetData, label = 'preset') {
-    // An absent formatVersion means the preset predates stamping — which is
-    // exactly the set of presets written before any future behaviour change.
-    // The absence is itself the signal, so nothing already saved needs migrating.
+    // Unstamped presets are read as the baseline rather than as null, so callers
+    // always get a version to compare. Nothing on disk is rewritten: the stamp
+    // appears the next time the preset is saved, and until then it is inferred
+    // fresh on every load.
+    const inferred = presetData?.appVersion === undefined;
     const provenance = {
         formatVersion: presetData?.formatVersion ?? 0,
-        appVersion: presetData?.appVersion ?? null,
-        legacy: presetData?.formatVersion === undefined,
+        appVersion: presetData?.appVersion ?? PRESET_BASELINE_VERSION,
+        inferred,
     };
 
     if (provenance.formatVersion > PRESET_FORMAT_VERSION) {
