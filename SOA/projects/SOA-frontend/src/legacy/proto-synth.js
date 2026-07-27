@@ -716,6 +716,7 @@ const createSynthHTML = (synthInstance) => {
         <div class="mini-synth ${typeClass}" data-instance-id="${uniqueId}">
             ${meterLadderHTML(`${uniqueId}-meter`)}
             ${headerHTML}
+            <div class="grab-strip" aria-hidden="true"></div>
             ${parameterAreaHTML}
             ${controlsHTML}
         </div>

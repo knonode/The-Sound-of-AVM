@@ -109,6 +109,33 @@
             gap: 3px; /* Reduced gap */
         }
 
+        /* Grab strip: the future drag handle for reordering cards.
+           It costs zero card height — .mini-synth is a flex column, so the
+           5px margin-bottom above and the 8px margin-top below never
+           collapsed, they added up to 13px of dead space. The strip takes
+           over that exact 13px and the two margins are zeroed below.
+           Master has no strip, so master keeps its original margins. */
+        .grab-strip {
+            height: 13px;
+            flex-shrink: 0;
+            /* Three flat 1px rules, no highlight pass — a groove read, not a
+               bevel. Drawn into a 9px band centred in the 13px: that puts the
+               lines on whole pixels (a 10px band centres at 1.5px and blurs)
+               with an even 2px clear of the solid border above and the dashed
+               one below, so neither reads as a doubled rule. */
+            background-image: repeating-linear-gradient(
+                to bottom,
+                #006666 0 1px,
+                transparent 1px 4px
+            );
+            background-size: 100% 9px;
+            background-position: 0 center;
+            background-repeat: no-repeat;
+        }
+
+        .mini-synth:not(.master-synth) > .synth-header { margin-bottom: 0; }
+        .mini-synth:not(.master-synth) > .parameter-area { margin-top: 0; }
+
         .led {
             width: 8px;
             height: 8px;
