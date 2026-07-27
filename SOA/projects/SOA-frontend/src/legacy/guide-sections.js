@@ -420,18 +420,14 @@ export const GUIDE_SECTIONS = [
     body: `
       <p>Each of these opens full-screen over the app, drawing the same transactions
       you're listening to. Click anywhere, or press <strong>Escape</strong>, to come back.</p>
-      <ul>
-        <li><strong>Score</strong> — transactions as a scrolling graphic score.</li>
-        <li><strong>Loom</strong> — traffic woven into cloth as it arrives.</li>
-        <li><strong>Kintsugi</strong> — pending state fractures the surface; when it's
-        certified the cracks are filled with gold.</li>
-        <li><strong>Music Box</strong> — transactions pin the mempool drum and pluck the
-        comb as it turns.</li>
-        <li><strong>Territory</strong> — every transaction claims its share of the screen
-        and squeezes the standing ground aside.</li>
-      </ul>
-      <p><strong>Joy Division</strong>, <strong>Tetris</strong> and <strong>Drop</strong>
-      are greyed out — they're coming later.</p>
+      <p>The bar above is the current set — it changes as new ones are built, and greyed-out
+      names are the ones still being worked on. Each takes a different angle on the same
+      stream: <strong>Score</strong> lays transactions out as a scrolling graphic score,
+      while <strong>Territory</strong> gives every one of them a share of the screen and
+      lets new arrivals squeeze the standing ground aside.</p>
+      <p>They're worth opening while a busy preset is playing — the same burst that
+      crowds the sound also crowds the picture, which makes it easier to hear what you're
+      looking at.</p>
     `,
   },
 
