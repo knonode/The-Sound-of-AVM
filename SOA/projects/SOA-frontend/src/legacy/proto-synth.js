@@ -16,6 +16,7 @@ import GossipAPI from '../services/gossip';
 import { APP_VERSION } from './app-version.js';
 import { CHANGELOG } from './changelog.js';
 import { GUIDE_SECTIONS } from './guide-sections.js';
+import { initCardReorder } from './card-reorder.js';
 import { initXenakisViz, vizAddTx, vizAddBlock } from './xenakis-viz.js';
 import { initLoomViz, loomAddTx, loomAddBlock } from './loom-viz.js';
 import { initKintsugiViz, kintsugiAddTx, kintsugiAddBlock } from './kintsugi-viz.js';
@@ -716,7 +717,10 @@ const createSynthHTML = (synthInstance) => {
         <div class="mini-synth ${typeClass}" data-instance-id="${uniqueId}">
             ${meterLadderHTML(`${uniqueId}-meter`)}
             ${headerHTML}
-            <div class="grab-strip" aria-hidden="true"></div>
+            <!-- Not aria-hidden any more: it is a control now. Its role, its
+                 name and its position in the order are written by
+                 card-reorder.js, which is the only thing that knows them. -->
+            <div class="grab-strip"></div>
             ${parameterAreaHTML}
             ${controlsHTML}
         </div>
@@ -2472,6 +2476,38 @@ const initializeEventListeners = () => {
     synthContainer.addEventListener('change', handleContainerChange);
     synthContainer.addEventListener('input', handleContainerInput);
     synthContainer.addEventListener('keydown', handleContainerKeydown);
+
+    // Drag-to-reorder, on the grab strip. The module moves the cards; the
+    // order of activeSynths has to follow, because that array is what a preset
+    // is written from and what it is rebuilt into — if the two disagree, a
+    // layout saved after a drag comes back in the order it had before.
+    initCardReorder(synthContainer, {
+        // What a card is called when there is no screen to look at. The label
+        // first, because that is the name its author gave it; otherwise the
+        // rule it listens for, which is the next most useful thing to hear. An
+        // untouched card says so rather than reading out its generated id.
+        describe: (id) => {
+            const instance = findInstance(id);
+            if (!instance) return 'synth';
+            const { type, subtype, parameters } = instance.config ?? {};
+            const label = parameters?.label?.trim();
+            if (label) return `${label}, ${type ?? 'unset'} synth`;
+            if (!type) return 'unconfigured synth';
+            return subtype ? `${type} ${subtype} synth` : `${type} synth`;
+        },
+        onReorder: (ids) => {
+            const byId = new Map(activeSynths.map((s) => [s.id, s]));
+            const reordered = ids.map((id) => byId.get(id)).filter(Boolean);
+            // Anything the DOM didn't account for keeps its place at the back
+            // rather than being dropped: losing a synth to a reorder would be a
+            // far worse failure than an odd position.
+            for (const instance of activeSynths) {
+                if (!reordered.includes(instance)) reordered.push(instance);
+            }
+            activeSynths = reordered;
+        },
+    });
+
     console.log("Delegated event listeners attached to synthContainer.");
 };
 

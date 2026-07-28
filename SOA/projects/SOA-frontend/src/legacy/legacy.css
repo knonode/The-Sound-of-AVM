@@ -118,23 +118,65 @@
         .grab-strip {
             height: 13px;
             flex-shrink: 0;
-            /* Three flat 1px rules, no highlight pass — a groove read, not a
-               bevel. Drawn into a 9px band centred in the 13px: that puts the
-               lines on whole pixels (a 10px band centres at 1.5px and blurs)
-               with an even 2px clear of the solid border above and the dashed
-               one below, so neither reads as a doubled rule. */
+            /* The gesture is wired up now, so the strip may say so. touch-action
+               is what stops a drag on a phone from scrolling the page out from
+               under the card instead of moving it. */
+            cursor: grab;
+            touch-action: none;
+            /* Flat 1px rules, no highlight pass — a groove read, not a bevel.
+               Two of them rather than the original three: three filled the band
+               edge to edge and read as a hatched block, and the groove only
+               needs enough repetition to say "texture, grab here".
+
+               Drawn into a 5px band (rules at 0 and 4) centred in the 13px, so
+               they land at y=4 and y=8 — whole pixels, which is what keeps a
+               1px line from blurring across two — with a symmetric 4px clear of
+               the solid border above and the dashed one below, so neither reads
+               as a doubled rule. For the old three, make the band 9px. */
             background-image: repeating-linear-gradient(
                 to bottom,
                 #006666 0 1px,
                 transparent 1px 4px
             );
-            background-size: 100% 9px;
+            background-size: 100% 5px;
             background-position: 0 center;
             background-repeat: no-repeat;
+        }
+        /* The strip is a real control now, so it takes focus and has to show
+           it. Solid, and inside its own 13px band so it cannot be mistaken for
+           the card's own border. */
+        .grab-strip:focus-visible {
+            outline: 2px solid #00cccc;
+            outline-offset: -2px;
         }
 
         .mini-synth:not(.master-synth) > .synth-header { margin-bottom: 0; }
         .mini-synth:not(.master-synth) > .parameter-area { margin-top: 0; }
+
+        /* While a card is being dragged. It stays in the grid and keeps its
+           slot's size — the whole point is that the layout under the cursor is
+           the layout you will get — so it is marked by an outline and by
+           nothing else.
+
+           Specifically not by fading it. Cards are colour-coded by transaction
+           type, and every one of those colours is a translucent wash over the
+           page's dark green: drop a card's opacity and its own colour goes with
+           it, so the brown of an axfer sinks back towards the background and
+           for a moment you are dragging a card of a type you did not pick. The
+           one channel that says "this one" has to survive being said. A solid
+           white rule is the loudest mark available that borrows nothing from
+           the palette underneath it. */
+        .mini-synth.card-dragging {
+            outline: 2px solid #ffffff;
+            outline-offset: -2px;
+        }
+        /* Held down anywhere on the grid: the cursor keeps saying "carrying",
+           and text stops selecting under a pointer that is dragging a card. */
+        .cards-reordering,
+        .cards-reordering .grab-strip {
+            cursor: grabbing;
+            user-select: none;
+        }
 
         .led {
             width: 8px;
