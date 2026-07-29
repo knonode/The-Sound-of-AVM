@@ -68,6 +68,45 @@
             background-color: #009999;
         }
 
+        /* One focus mark, for everything you can reach with Tab.
+
+           The browser does draw its own, but not usefully here: a range input
+           is a 5px track on a dark teal card, and the default indicator hugs
+           the thumb in a colour chosen for a white page, so keyboard focus was
+           landing on slider after slider with nothing to show for it. Ringing
+           the whole control instead of the thumb keeps this to a focus style
+           rather than a rewrite — outlining the knob itself means taking over
+           the slider's appearance wholesale, and then owning the look of every
+           slider in the app forever.
+
+           :focus-visible, not :focus, so a mouse click on a slider does not
+           leave a ring sitting there; a click that is followed by arrow keys
+           brings it back, which is exactly when it is wanted.
+
+           Plain `input` carries the list, because most of the value boxes on a
+           card have no type attribute at all — they are text inputs by default
+           — and an attribute selector matches the attribute rather than the
+           behaviour, so a list of input[type=...] silently skips exactly the
+           controls you spend the most time in.
+
+           Range then has to be named anyway, on top of that. A bare
+           `input:focus-visible` reaches every other control on a card and is
+           beaten on the sliders alone — the app is built on Tailwind and
+           daisyUI, whose form layer claims `[type=range]` by attribute and so
+           outranks a plain element selector. Naming the type here restores the
+           order. Verified by tabbing the whole card and reading back what each
+           control actually computed, which is the only way this is ever going
+           to be true: nothing about it is visible in this file. */
+        input:focus-visible,
+        input[type="range"]:focus-visible,
+        select:focus-visible,
+        button:focus-visible,
+        a:focus-visible,
+        [tabindex]:focus-visible {
+            outline: 2px solid #00e5e5;
+            outline-offset: 1px;
+        }
+
         .synth-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Responsive columns */
@@ -432,9 +471,13 @@
             font-size: 10px;
             padding: 0 2px;
         }
+        /* Hover and focus used to be the same rule, which also killed the focus
+           ring — so a value box you had tabbed to looked exactly like one the
+           mouse happened to be over, and there was no way to tell by looking
+           where the keyboard was. The border is the hover tell; focus keeps the
+           ring the block near the top of this file gives every control. */
         .value-input:hover, .value-input:focus {
             border-color: #004d4d;
-            outline: none;
         }
         /* Synth engine picker: five choices, must fit one row on a narrow
            card — tighter padding/font than the standard .api-btn. */
