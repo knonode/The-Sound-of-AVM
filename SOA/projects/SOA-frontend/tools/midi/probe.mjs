@@ -127,7 +127,9 @@ async function main() {
   }
   if (balance > 0n) console.log(`balance  ${algos(balance)} ALGO`)
 
-  if (balance < 200000n) {
+  // Fifty notes' worth. Low enough not to stand in the way of a hat that can
+  // still be played, high enough to notice before the next note is refused.
+  if (balance < 50000n) {
     console.log('')
     console.log('Not enough to play. Send ~1 ALGO to the escrow address above and re-run.')
     console.log('Anyone who knows that address can spend it, 0.001 at a time — fund it')

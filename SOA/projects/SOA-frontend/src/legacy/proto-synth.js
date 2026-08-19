@@ -59,6 +59,7 @@ import {
     looksLikeNfd,
     resolveNfd,
     isPatchAsset,
+    isNoteAsset,
     getMidiStats,
     getKeyboardAddress,
     getKeyboardBalance,
@@ -1063,6 +1064,7 @@ const startTransactionStream = async () => {
     // ID encodes rather than at one note for the whole type.
     if (mainType === 'axfer') {
         const xaid = txData?.txn?.xaid;
+        if (isNoteAsset(xaid)) spendFromEscrow();
         if (isPatchAsset(xaid)) {
             receiveCarriedVoice(txData);
         } else {
@@ -2904,6 +2906,48 @@ function reportMidiRoundTrip(ms) {
     refreshMidiStatus();
 }
 
+// The hat empties one note at a time, and every one of those notes goes past
+// this browser on the way back. So the readout is driven by what is heard
+// rather than by asking: a keypress anywhere in the world moves the number
+// here, at the same moment you hear the note that spent it.
+const NOTE_FEE_MICROALGOS = 1000;
+
+function spendFromEscrow() {
+    if (midiEscrowBalance === null) return;
+    midiEscrowBalance = Math.max(0, midiEscrowBalance - NOTE_FEE_MICROALGOS);
+    refreshMidiStatus();
+}
+
+// Counting what we hear drifts: the stream can be stopped, a relay can miss a
+// transaction, and a hat can be topped up by someone who is not playing. So the
+// count is corrected against the chain on a slow timer — often enough that the
+// number is never far wrong, rarely enough to be nothing to a public node.
+const ESCROW_RESYNC_MS = 45_000;
+let escrowWatchTimer = null;
+
+async function resyncEscrowBalance() {
+    const micro = await getKeyboardBalance();
+    if (micro === null) return; // a failed read is not a balance of nothing
+    midiEscrowBalance = micro;
+    refreshMidiStatus();
+}
+
+function startEscrowWatch() {
+    if (escrowWatchTimer) return;
+    resyncEscrowBalance();
+    escrowWatchTimer = setInterval(() => {
+        // A hidden tab is nobody watching a number. Resume on the next look.
+        if (document.visibilityState === 'hidden') return;
+        resyncEscrowBalance();
+    }, ESCROW_RESYNC_MS);
+}
+
+function stopEscrowWatchIfUnwatched() {
+    if (activeSynths.some((i) => i.config.type === 'midi')) return;
+    clearInterval(escrowWatchTimer);
+    escrowWatchTimer = null;
+}
+
 function refreshMidiStatus() {
     const balance = midiEscrowBalance === null ? '—' : `${(midiEscrowBalance / 1e6).toFixed(3)} ALGO`;
     const trip = midiLastRoundTrip === null ? 'unheard' : `${midiLastRoundTrip} ms round trip`;
@@ -2921,10 +2965,7 @@ async function initializeMidiCard(instanceId) {
     const select = document.getElementById(`${instanceId}-midi-device`);
     const status = document.getElementById(`${instanceId}-midi-status`);
 
-    getKeyboardBalance().then((micro) => {
-        midiEscrowBalance = micro;
-        refreshMidiStatus();
-    });
+    startEscrowWatch();
 
     if (!midiSupported()) {
         if (select) select.disabled = true;
@@ -3317,13 +3358,13 @@ const handleCloseLogic = (instanceId, synthElement) => {
         stopStateProofCountdown(instanceId);
         // A closed card must not keep a keyboard bound, or notes carry on
         // going out to an instrument that is no longer on screen.
-        if (activeSynths[index].config.type === 'midi') {
-            bindMidiInput(null, null);
-        }
+        const wasMidi = activeSynths[index].config.type === 'midi';
+        if (wasMidi) bindMidiInput(null, null);
         // Then dispose synthesis objects
         disposeSynth(instanceId, activeSynths);
         activeSynths.splice(index, 1);
         synthElement.remove();
+        if (wasMidi) stopEscrowWatchIfUnwatched();
         console.log("Active synths after close:", activeSynths);
     } else {
         console.warn(`Could not find synth instance ${instanceId} to remove.`);
