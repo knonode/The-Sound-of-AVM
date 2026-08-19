@@ -16,16 +16,17 @@
     </div>
 
     <div class="actions-bar">
-        <div class="viz-bar">
-            <button class="api-btn viz-btn" data-viz="score" title="The Score">Score</button>
-            <button class="api-btn viz-btn" data-viz="loom" title="The Loom">Loom</button>
-            <button class="api-btn viz-btn" disabled title="coming later">Joy Division</button>
-            <button class="api-btn viz-btn" disabled title="coming later">Tetris</button>
-            <button class="api-btn viz-btn" disabled title="coming later">Drop</button>
-            <button class="api-btn viz-btn" data-viz="kintsugi" title="Kintsugi Ledger — pending state fractures, certified state becomes gold">Kintsugi</button>
-            <button class="api-btn viz-btn" data-viz="musicbox" title="Music Box — transactions pin the mempool drum and pluck the comb">Music Box</button>
-            <button class="api-btn viz-btn" data-viz="territory" title="Territory — every transaction claims its share of the screen; arrivals squeeze the standing ground aside">Territory</button>
-        </div>
+        <select id="viz-select" class="viz-select" title="Full-screen pictures of the traffic you are hearing. Escape or a click returns.">
+            <option value="">Visualize</option>
+            <option value="score" title="The Score">Score</option>
+            <option value="loom" title="The Loom">Loom</option>
+            <option value="" disabled>Joy Division — later</option>
+            <option value="" disabled>Tetris — later</option>
+            <option value="" disabled>Drop — later</option>
+            <option value="kintsugi" title="Pending state fractures, certified state becomes gold">Kintsugi</option>
+            <option value="musicbox" title="Transactions pin the mempool drum and pluck the comb">Music Box</option>
+            <option value="territory" title="Every transaction claims its share of the screen; arrivals squeeze the standing ground aside">Territory</option>
+        </select>
         <span id="stall-counter" title="Main-thread stalls over 50ms since load (temporary diagnostic)">stalls: 0</span>
         <span id="load-readout" title="Audio-thread load: average / peak per interval, plus total render underruns (actual missed deadlines = audible glitches)">load: --</span>
         <button id="toggle-aggr-btn" class="toggle-btn" disabled>Aggr Txs</button>
@@ -69,7 +70,7 @@
     </footer>
 
     <!-- Visualizations: fullscreen overlay, closed by default. Opened via
-         the viz-bar buttons in the actions-bar; click or Escape to close. -->
+         the Visualize menu in the actions-bar; click or Escape to close. -->
     <div class="viz-container" id="viz-score" style="display: none;">
         <canvas id="xenakis-canvas" class="viz-canvas"></canvas>
     </div>

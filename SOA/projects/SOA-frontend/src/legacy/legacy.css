@@ -300,9 +300,16 @@
             cursor: not-allowed;
         }
 
-        .viz-bar {
-            display: flex;
-            gap: 3px;
+        /* One menu where eight buttons were. They were the widest thing in this
+           bar, and only ever one of them was in use at a time. */
+        .viz-select {
+            background-color: #004d4d;
+            color: #00cccc;
+            border: 1px solid #006666;
+            border-radius: 4px;
+            font-size: 11px;
+            padding: 3px 4px;
+            max-width: 120px;
         }
 
         /* Visualizations are a fullscreen overlay, not part of page flow —

@@ -2475,11 +2475,14 @@ export async function bootLegacySynth() {
   initTerritoryViz(document.getElementById('territory-root'));
   window.territoryTest = { addTx: territoryAddTx, addBlock: territoryAddBlock };
 
-  // Visualization overlay: click a button to take over the screen; click
-  // the open viz (or its own button again), or press Escape, to leave.
+  // Visualization overlay: pick one from the menu to take over the screen;
+  // click the open viz, pick the menu's own name again, or press Escape, to
+  // leave. The menu is where eight buttons used to be — they were the widest
+  // thing in the bar and only ever one of them was in use.
+  const vizSelect = document.getElementById('viz-select');
   let vizOverlayOpen = false;
   const openViz = (target) => {
-      document.querySelectorAll('.viz-btn[data-viz]').forEach(b => b.classList.toggle('active', b.dataset.viz === target));
+      if (vizSelect) vizSelect.value = target;
       document.getElementById('viz-score').style.display = target === 'score' ? '' : 'none';
       document.getElementById('viz-loom').style.display = target === 'loom' ? '' : 'none';
       document.getElementById('viz-kintsugi').style.display = target === 'kintsugi' ? '' : 'none';
@@ -2489,7 +2492,7 @@ export async function bootLegacySynth() {
   };
   const closeViz = () => {
       if (!vizOverlayOpen) return;
-      document.querySelectorAll('.viz-btn[data-viz]').forEach(b => b.classList.remove('active'));
+      if (vizSelect) vizSelect.value = '';
       document.getElementById('viz-score').style.display = 'none';
       document.getElementById('viz-loom').style.display = 'none';
       document.getElementById('viz-kintsugi').style.display = 'none';
@@ -2497,11 +2500,10 @@ export async function bootLegacySynth() {
       document.getElementById('viz-territory').style.display = 'none';
       vizOverlayOpen = false;
   };
-  document.querySelectorAll('.viz-btn[data-viz]').forEach(btn => {
-      btn.addEventListener('click', () => {
-          if (vizOverlayOpen && btn.classList.contains('active')) closeViz();
-          else openViz(btn.dataset.viz);
-      });
+  vizSelect?.addEventListener('change', () => {
+      // The first entry is the menu's own name, so choosing it means "none".
+      if (vizSelect.value) openViz(vizSelect.value);
+      else closeViz();
   });
   document.getElementById('viz-score').addEventListener('click', closeViz);
   document.getElementById('viz-loom').addEventListener('click', closeViz);

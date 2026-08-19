@@ -419,13 +419,15 @@ export const GUIDE_SECTIONS = [
   {
     id: '19-visualizations',
     title: 'Visualizations',
-    selector: '.viz-bar',
+    // No shot: the set lives in a dropdown now, and a closed dropdown shows none of it.
+    selector: null,
     state: 'page',
-    viewport: 900, // full-width bar: shot narrow so it stays legible in the modal
     body: `
-      <p>Each of these opens full-screen over the app, drawing the same transactions
-      you're listening to. Click anywhere, or press <strong>Escape</strong>, to come back.</p>
-      <p>The bar above is the current set — it changes as new ones are built, and greyed-out
+      <p>The <strong>Visualize</strong> menu on the left of the second row opens one
+      full-screen over the app, drawing the same transactions you're listening to. Click
+      anywhere, press <strong>Escape</strong>, or pick <em>Visualize</em> again, to come
+      back.</p>
+      <p>The menu is the current set — it changes as new ones are built, and greyed-out
       names are the ones still being worked on. Each takes a different angle on the same
       stream: <strong>Score</strong> lays transactions out as a scrolling graphic score,
       while <strong>Territory</strong> gives every one of them a share of the screen and
