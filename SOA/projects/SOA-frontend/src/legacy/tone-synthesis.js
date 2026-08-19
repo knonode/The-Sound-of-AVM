@@ -462,6 +462,85 @@ async function rebuildVoice(instance) {
     instance.toneObjects._lastTriggerTime = undefined; // fresh voice, fresh monotonic guard
 }
 
+/**
+ * Push a whole settings object onto an instance whose graph is already running.
+ *
+ * This is what a voice arriving from another player needs: their sound has to
+ * take effect under a chain that is mid-flight, without the teardown that
+ * building a card from scratch would cost. Only the engine is a different class
+ * of object; everything else a voice carries — waveform, envelope, detune,
+ * cutoff, delay, pan, LFO — is a parameter on nodes that already exist, so it
+ * is set rather than rebuilt.
+ *
+ * Room size is deliberately not applied. It is a property of the shared reverb
+ * bus, and one player's patch should not move everybody else's hall.
+ */
+async function applyVoice(instance, voice) {
+    if (!instance || instance.id === 'master') return;
+    const previous = instance.settings ?? {};
+    instance.settings = { ...previous, ...voice };
+    const settings = instance.settings;
+
+    const objects = instance.toneObjects;
+    if (!objects) {
+        await initializeToneForInstance(instance);
+        return;
+    }
+
+    if (previous.engine !== settings.engine) {
+        await rebuildVoice(instance);
+    } else {
+        const env = settings.envelope || {};
+        const options = {
+            oscillator: buildOscillatorOptions(settings.oscillator),
+            envelope: {
+                ...env,
+                attack: Math.max(0.005, env.attack ?? 0.005),
+                release: Math.max(0.03, env.release ?? 0.03)
+            },
+            detune: settings.detune ?? 0
+        };
+        // Only the engines that own these: Tone throws on a parameter the voice
+        // it was handed does not have.
+        if (settings.engine === 'am' || settings.engine === 'fm') {
+            options.harmonicity = settings.harmonicity ?? 3;
+        }
+        if (settings.engine === 'fm') {
+            options.modulationIndex = settings.modulationIndex ?? 10;
+        }
+        if (settings.engine === 'monosynth') {
+            const fenv = settings.filterEnvelope || {};
+            options.filterEnvelope = {
+                attack: fenv.attack ?? 0.6,
+                decay: fenv.decay ?? 0.2,
+                sustain: fenv.sustain ?? 0.5,
+                release: fenv.release ?? 2
+            };
+        }
+        try {
+            objects.synth.set(options);
+        } catch (error) {
+            // A voice Tone would not take is better rebuilt than left half-applied.
+            console.warn('Could not set voice parameters, rebuilding:', error.message);
+            await rebuildVoice(instance);
+        }
+    }
+
+    objects.synth.volume.value = settings.muted ? -Infinity : (settings.volume ?? -8);
+    objects.filter.frequency.value = settings.filter?.cutoff ?? 20000;
+    objects.panner.pan.value = settings.pan ?? 0;
+    objects.delay.delayTime.value = settings.delay?.time ?? 0;
+    objects.delay.feedback.value = settings.delay?.feedback ?? 0;
+    objects.delay.wet.value = settings.delay?.wet ?? 0;
+    objects.reverbSend.gain.value = settings.reverb?.wet ?? 0;
+    objects.lfo.frequency.value = settings.lfo?.rate ?? 5;
+    objects.lfo.type = settings.lfo?.waveform ?? 'sine';
+    objects.vibrato.frequency.value = settings.lfo?.rate ?? 5;
+
+    rewireFxChain(objects, settings);
+    connectLFO(instance);
+}
+
 // Wire filter -> [delay] -> panner, plus a post-pan send into the shared
 // reverb bus when reverb wet > 0. A connected effect renders every quantum
 // even in silence, so bypass must mean disconnection — an unreachable node
@@ -556,9 +635,14 @@ function playTransactionSound(instance, timeOffset = 0, opts = {}) {
   }
 
   // --- Note Calculation ---
+  // Pitch is a property of the synth, not of the transaction — every tx of a
+  // matching type sounds the same note. The one exception is a transaction that
+  // carries a pitch of its own: a MIDI note encoded into an asset ID arrives
+  // with a semitone offset, and the base note becomes what it was played from.
   const baseNote = settings.baseNote;
   const pitchShift = settings.pitch;
-  const note = Tone.Frequency(baseNote).transpose(pitchShift + sequenceOffset);
+  const carriedOffset = opts.semitoneOffset ?? 0;
+  const note = Tone.Frequency(baseNote).transpose(pitchShift + sequenceOffset + carriedOffset);
   const duration = settings.noteDuration * (opts.durationScale ?? 1);
   const velocity = opts.velocity ?? (0.7 + (Math.random() * 0.3)); // Random velocity
 
@@ -713,6 +797,7 @@ export {
     rewireFxChain,
     updateSharedReverbRoomSize,
     rebuildVoice,
+    applyVoice,
     unlockIOSAudioOnce
 };
 

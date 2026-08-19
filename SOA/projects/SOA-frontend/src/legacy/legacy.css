@@ -609,6 +609,30 @@
             text-align: center;
         }
 
+        #others-filter {
+            width: 96px;
+            background-color: #003333;
+            color: #00cccc;
+            border: 1px solid #006666;
+            border-radius: 4px;
+            font-size: 11px;
+            padding: 3px 4px;
+        }
+        #others-filter.invalid-address {
+            border-color: #b3541e;
+            color: #e08a5a;
+        }
+        #others-filter:disabled {
+            opacity: 0.5;
+        }
+        /* The toggle and the filter it governs are one control. Left loose in a
+           wrapping bar they end up on separate rows, reading as two. */
+        .others-controls {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
         /* Specific styling for base note controls row */
         .base-note-controls {
             justify-content: space-between; /* Space out buttons and display */
@@ -1246,5 +1270,63 @@
             font-weight: bold;
             font-family: 'Courier New', monospace;
             width: 100%;
+        }
+
+        /* --- MIDI card --- */
+        /* The name holds the space the Type and Sub selects occupy on every
+           other card. It is not a control, so it should not look like one. */
+        .synth-header .midi-card-title {
+            flex-grow: 1;
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #029e0a;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Same look as .param-input, without the class — that one is also how
+           the delegated change handler recognises a transaction filter, and
+           these are not. */
+        .midi-device-select,
+        .midi-player-input {
+            width: 100%;
+            min-width: 0;
+            background-color: #004d4d;
+            color: rgb(203, 226, 228);
+            border: 1px solid #006666;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 10px;
+            box-sizing: border-box;
+        }
+
+        /* An address that cannot receive anything is worth seeing before the
+           first note goes out stamped with it. */
+        .midi-player-input.invalid-address {
+            border-color: #b3541e;
+            color: #e08a5a;
+        }
+
+        /* The account a typed name turned out to mean. Small, under the field,
+           and never silent about a lookup that failed. */
+        .midi-resolved {
+            margin: -2px 0 4px 65px;
+            font-size: 9px;
+            color: #43b38d;
+            font-family: 'Courier New', monospace;
+            min-height: 11px;
+        }
+        .midi-resolved.resolve-failed {
+            color: #e08a5a;
+        }
+
+        .midi-status {
+            margin-top: 4px;
+            font-size: 10px;
+            color: #43b38d;
+            font-family: 'Courier New', monospace;
+            text-align: center;
         }
 

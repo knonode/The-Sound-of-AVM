@@ -1,0 +1,55 @@
+#pragma version 10
+
+// The Keyboard — a public escrow that signs nothing but notes.
+//
+// There is no private key. Anyone holding this program can play, which is the
+// point: the instrument is an address, not an account. It authorises exactly
+// one shape of transaction — a zero-amount transfer of an asset that does not
+// exist, paying no more than the minimum fee — so the only thing that can ever
+// leave this account is fees.
+//
+// The note lives in the asset ID:  xaid = 2^40 + midiNote*1000 + velocity
+
+txn TypeEnum
+int axfer
+==
+
+// Zero amount is what makes a non-existent asset legal: takeOut and putIn
+// both return before they look up any holding.
+txn AssetAmount
+int 0
+==
+&&
+
+// Fee ceiling. A player cannot burn the balance faster than 0.001 a note.
+txn Fee
+int 1000
+<=
+&&
+
+// No clawback — an unset AssetSender means this is a plain transfer.
+txn AssetSender
+global ZeroAddress
+==
+&&
+
+// Nothing may be closed out, and the account may not change hands.
+txn AssetCloseTo
+global ZeroAddress
+==
+&&
+txn RekeyTo
+global ZeroAddress
+==
+&&
+
+// The asset ID must fall inside the note range: 2^40 .. 2^40 + 128*1000.
+// Outside it this is not a note, and the escrow will not sign it.
+txn XferAsset
+int 1099511627776
+>=
+&&
+txn XferAsset
+int 1099511755776
+<
+&&

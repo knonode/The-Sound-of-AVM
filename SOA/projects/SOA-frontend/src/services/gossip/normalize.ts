@@ -3,6 +3,7 @@
 // base32 address strings, plain numbers, base64 group ids.
 
 import algosdk from 'algosdk'
+import { KEYBOARD_ASSET_FLOOR } from '../midi/voice'
 
 export interface NormalizedTx {
   txn: Record<string, unknown>
@@ -10,6 +11,18 @@ export interface NormalizedTx {
   receivedAt: number
   /** Full sanitized decode, attached only for rare heavyweight txs (stpf) */
   raw?: unknown
+  /** Dedup discriminator for txns with no `sig` (lsig/msig). See dedupKey. */
+  dk?: string
+}
+
+/** FNV-1a over the note/lease bytes: enough to tell two txns apart, 6 chars. */
+function hash32(bytes: Uint8Array): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < bytes.length; i++) {
+    h ^= bytes[i]
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(36)
 }
 
 /**
@@ -102,6 +115,17 @@ export function normalizeSignedTxn(raw: unknown, receivedAt: number): Normalized
   if (Array.isArray(t.apat)) {
     txn.apat = t.apat.map(toAddr).filter((a): a is string => a !== undefined)
   }
+  // The MIDI keyboard's own traffic sometimes carries a voice in the note field
+  // (services/midi/voice.ts). Extracting `note` for every transaction would mean
+  // holding up to a kilobyte each for all of mainnet, so it is extracted only
+  // for the keyboard's asset range. `aamt` is absent rather than 0 on these:
+  // canonical msgpack omits zero-valued fields, which is also why a note sent
+  // to the zero address arrives with no `arcv` at all.
+  if (typeof txn.xaid === 'number' && txn.xaid >= KEYBOARD_ASSET_FLOOR && !txn.aamt) {
+    const carried = toB64(t.note)
+    if (carried !== undefined) txn.note = carried
+  }
+
   // Group id as base64 — the key for group-as-unit matching
   const grp = toB64(t.grp)
   if (grp !== undefined) txn.grp = grp
@@ -116,13 +140,26 @@ export function normalizeSignedTxn(raw: unknown, receivedAt: number): Normalized
     if (hbad !== undefined) txn.hbad = hbad
   }
 
-  return { txn, sig: toB64(st.sig), receivedAt }
+  const sig = toB64(st.sig)
+  // Logic-signed and multisig txns have no `sig`, so dedup falls back to a
+  // composite of the txn's own fields. Sender, fee and validity window are
+  // identical for every note the MIDI keyboard escrow plays in a given minute,
+  // so the composite has to reach for what actually differs: the asset ID that
+  // carries the note, the receiver that says who played it, and the random
+  // bytes the sender added to keep two identical notes from being one txn.
+  let dk: string | undefined
+  if (sig === undefined) {
+    const nonce = t.note instanceof Uint8Array ? hash32(t.note) : ''
+    const lease = t.lx instanceof Uint8Array ? hash32(t.lx) : ''
+    dk = `${txn.type}:${txn.snd}:${txn.fv}:${txn.lv}:${txn.fee}:${txn.grp ?? ''}:${txn.xaid ?? ''}:${txn.arcv ?? ''}:${txn.amt ?? ''}:${txn.rcv ?? ''}:${nonce}${lease}`
+  }
+
+  return { txn, sig, receivedAt, dk }
 }
 
-// Dedup key: the signature is unique per signed transaction. Fall back to a
-// cheap composite for msig/lsig-signed txns (a rare duplicate just double-blips).
+// Dedup key: the signature is unique per signed transaction. Txns without one
+// (msig, lsig) carry a composite built at normalize time, while the raw bytes
+// are still in hand — see normalizeSignedTxn.
 export function dedupKey(tx: NormalizedTx): string {
-  if (tx.sig) return tx.sig
-  const t = tx.txn
-  return `${t.type}:${t.snd}:${t.fv}:${t.lv}:${t.fee}:${t.grp ?? ''}`
+  return tx.sig ?? tx.dk ?? `${tx.txn.type}:${tx.txn.snd}:${tx.txn.fv}:${tx.txn.lv}`
 }

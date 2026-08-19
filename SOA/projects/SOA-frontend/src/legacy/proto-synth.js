@@ -40,11 +40,32 @@ import {
     rewireFxChain,
     updateSharedReverbRoomSize,
     rebuildVoice,
+    applyVoice,
     synthsInitialized,
     isMasterMuted,
     masterVolumeBeforeMute,
     unlockIOSAudioOnce
 } from './tone-synthesis.js';
+
+import {
+    decodeNote,
+    sendNote,
+    claimRoundTrip,
+    listMidiInputs,
+    bindMidiInput,
+    onMidiPortChange,
+    midiSupported,
+    isValidPlayer,
+    looksLikeNfd,
+    resolveNfd,
+    isPatchAsset,
+    getMidiStats,
+    getKeyboardAddress,
+    getKeyboardBalance,
+} from './midi-keyboard.js';
+
+import { ellipseAddress } from '../utils/ellipseAddress';
+import { packVoice, unpackVoice, voiceFingerprint } from '../services/midi/voice';
 
 // UI and application state (non-synthesis)
 let isPlaying = false;
@@ -567,7 +588,17 @@ const createSynthHTML = (synthInstance) => {
     }
 
     // --- Generate Header HTML ---
-    const headerHTML = `
+    // A MIDI card isn't a filter over the feed the way the others are — it
+    // listens for one shape of transaction only — so it gets a name where the
+    // Type and Sub selects would be, rather than two menus with one option.
+    const headerHTML = config.type === 'midi' ? `
+        <div class="synth-header">
+            <div class="led" id="led-${uniqueId}" title="click to test this sound"></div>
+            <span class="midi-card-title" title="Notes played into the mempool as zero-amount transfers of an asset that does not exist">MIDI</span>
+            <button class="mute-btn" data-instance-id="${uniqueId}" title="Mute/Unmute Synth">${settings.muted ? svgIconMuted : svgIconUnmuted}</button>
+            <button class="close-btn" data-instance-id="${uniqueId}" title="Remove Synth">×</button>
+        </div>
+    ` : `
         <div class="synth-header">
             <div class="led" id="led-${uniqueId}" title="click to test this sound"></div>
             <select class="type-select" data-instance-id="${uniqueId}" title="Select Transaction Type">
@@ -1025,6 +1056,28 @@ const startTransactionStream = async () => {
     bumpTypeCountDisplay(mainType);
     updatePersistentCountersDisplay();
 
+    // --- MIDI notes ---
+    // A note is an axfer like any other, and an axfer synth hears it as one:
+    // hiding it would be a lie about what is in the mempool. What a MIDI card
+    // adds is the pitch — the same transaction, sounded at the note its asset
+    // ID encodes rather than at one note for the whole type.
+    if (mainType === 'axfer') {
+        const xaid = txData?.txn?.xaid;
+        if (isPatchAsset(xaid)) {
+            receiveCarriedVoice(txData);
+        } else {
+            const carried = decodeNote(xaid);
+            if (carried) {
+                // A note's own field usually holds eight random bytes, but it
+                // is where a player's sound rides when it has changed. Read it
+                // before the note sounds, so the note it arrived with is
+                // already in the right voice.
+                receiveCarriedVoice(txData);
+                routeMidiNote(carried, txData);
+            }
+        }
+    }
+
     // --- NEW Prioritized Matching Logic ---
     let potentialMatches = activeSynths.filter(instance => instance.config.type === mainType);
 
@@ -1280,20 +1333,27 @@ const AGGR_FLUSH_MS = 250;
 let aggrMaxPerWindow = 10; // user-settable trigger cap (per synth, per second)
 let aggregationEnabled = false;
 
-function triggerInstanceWithRateLimit(instance, timeOffset) {
+function triggerInstanceWithRateLimit(instance, timeOffset, opts = {}) {
     const now = Date.now();
     if (!instance._triggerLog) instance._triggerLog = [];
     while (instance._triggerLog.length && now - instance._triggerLog[0] >= AGGR_WINDOW_MS) {
         instance._triggerLog.shift();
     }
 
-    if (instance._triggerLog.length < aggrMaxPerWindow) {
+    // A card may raise its own ceiling. The MIDI card does, because a player
+    // holding a chord is not the same thing as a busy mempool.
+    const cap = instance.settings?.triggerCap ?? aggrMaxPerWindow;
+    if (instance._triggerLog.length < cap) {
         instance._triggerLog.push(now);
-        playTransactionSoundWithUI(instance, timeOffset);
+        playTransactionSoundWithUI(instance, timeOffset, opts);
         return;
     }
 
     if (!aggregationEnabled) return; // Single mode: overflow is dropped
+    // Aggregation collapses many triggers into one hit, which has to pick a
+    // single pitch — so a transaction that carried its own is dropped instead.
+    // A missed note is better than a chord flattened to the wrong one.
+    if (opts.semitoneOffset !== undefined) return;
 
     instance._aggrCount = (instance._aggrCount || 0) + 1;
     if (!instance._aggrTimer) {
@@ -1308,6 +1368,209 @@ function triggerInstanceWithRateLimit(instance, timeOffset) {
             playTransactionSoundWithUI(instance, 0, { velocity, durationScale });
         }, AGGR_FLUSH_MS);
     }
+}
+
+// Middle C is the hinge: a note arrives as a semitone offset from it, so the
+// card's own base note decides what middle C sounds like and the keyboard keeps
+// its intervals either way.
+const MIDI_MIDDLE_C = 60;
+
+// What each player sounds like, as last announced. Keyed by the address on
+// their notes, which is the only thing that tells two players apart: the sender
+// is the escrow for everybody.
+const playerVoices = new Map();
+
+/** How many players have announced a voice, for the UI to report. */
+export const knownVoiceCount = () => playerVoices.size;
+export const getPlayerVoice = (address) => playerVoices.get(address)?.voice ?? null;
+
+// A window handle on who is playing and how they sound. Nothing in the app
+// reads it — it is here so a jam can be inspected from the console, and so an
+// end-to-end test can watch a voice arrive over the real relay.
+if (typeof window !== 'undefined') {
+    window.SOA_MIDI = {
+        voices: () => Array.from(playerVoices, ([player, entry]) => ({ player, heardAt: entry.heardAt, voice: entry.voice })),
+        playing: () => remoteInstances.map((r) => ({ player: r.player, engine: r.settings.engine, built: !!r.toneObjects })),
+    };
+}
+
+function receiveCarriedVoice(txData) {
+    const player = txData?.txn?.arcv;
+    const carried = txData?.txn?.note;
+    // An announcement with no address says "somebody sounds like this", which
+    // is not something anyone can act on.
+    if (!player || typeof carried !== 'string') return;
+    let bytes;
+    try {
+        bytes = Uint8Array.from(atob(carried), (c) => c.charCodeAt(0));
+    } catch {
+        return;
+    }
+    // unpackVoice returns null for anything that isn't a voice, which includes
+    // the ordinary case of a passing transaction whose note field is prose.
+    const voice = unpackVoice(bytes);
+    if (!voice) return;
+
+    // Every note carries its player's whole sound, so almost every one of these
+    // is the sound already on file. Comparing here means a voice is only ever
+    // *applied* when it actually changed — the graph rebuild that costs
+    // anything happens on a knob turn, not on a keypress.
+    const known = playerVoices.get(player);
+    const sound = voiceFingerprint(voice);
+    if (known?.sound === sound) {
+        known.heardAt = Date.now();
+        return;
+    }
+    playerVoices.set(player, { voice, sound, heardAt: Date.now(), changed: true });
+}
+
+/**
+ * The voice to put on the next note. Every note carries the whole sound: the
+ * fee is flat, so the note field is free space either way, and sending it every
+ * time means anyone who starts listening mid-jam has your voice on the first
+ * note they hear rather than whenever you next happen to change something. It
+ * also removes the question of when to repeat, which is a question with no
+ * good answer.
+ *
+ * Anonymous players are the exception. Their notes carry no address, so a
+ * listener has nothing to file the sound under, and the bytes would say
+ * "somebody sounds like this" to nobody in particular.
+ */
+function voiceForNextNote(instance) {
+    const player = instance.config.parameters?.player?.trim();
+    if (!player) return null;
+    return packVoice(instance.settings, APP_VERSION);
+}
+
+// --- Other people's voices ------------------------------------------------
+//
+// A player's notes should sound the way that player designed them, which means
+// a Tone graph per player rather than per card. They are kept out of
+// activeSynths on purpose: they are not cards, they must never be saved into a
+// preset, reordered, or matched against ordinary transaction rules.
+const REMOTE_VOICE_LIMIT = 4;
+const ANONYMOUS_PLAYER = 'anonymous';
+let remoteInstances = [];
+let remoteVoicesEnabled = true;
+// Blank hears everyone, which is the point of a keyboard nobody holds the keys
+// to. An address here narrows a crowded jam down to one person.
+let soloPlayer = '';
+
+export function setRemoteVoicesEnabled(enabled) {
+    remoteVoicesEnabled = !!enabled;
+    if (!remoteVoicesEnabled) releaseAllRemoteVoices();
+}
+
+export const areRemoteVoicesEnabled = () => remoteVoicesEnabled;
+export const remoteVoiceCount = () => remoteInstances.length;
+
+function setSoloPlayer(address) {
+    soloPlayer = address ?? '';
+    // Voices built for players who are no longer being listened to are just
+    // effects chains rendering silence.
+    if (soloPlayer) {
+        for (const instance of [...remoteInstances]) {
+            if (instance.player !== soloPlayer) releaseRemoteVoice(instance);
+        }
+    }
+}
+
+function releaseRemoteVoice(instance) {
+    disposeSynth(instance.id, remoteInstances);
+    remoteInstances = remoteInstances.filter((r) => r !== instance);
+}
+
+function releaseAllRemoteVoices() {
+    for (const instance of [...remoteInstances]) releaseRemoteVoice(instance);
+}
+
+/**
+ * The graph that plays for one player, built on first hearing them and kept
+ * until someone quieter needs the slot. Returns null while its audio is still
+ * being built, so the note that triggered the build is simply the one that
+ * doesn't get their sound.
+ */
+function remoteVoiceFor(player, entry) {
+    let instance = remoteInstances.find((r) => r.player === player);
+
+    if (!instance) {
+        // Slots are finite because each one is a full effects chain rendering
+        // every quantum. The player heard from least recently gives way.
+        if (remoteInstances.length >= REMOTE_VOICE_LIMIT) {
+            const quietest = remoteInstances.reduce((a, b) => (a.heardAt <= b.heardAt ? a : b));
+            releaseRemoteVoice(quietest);
+        }
+        instance = {
+            id: `remote-${player.slice(0, 8)}-${Date.now().toString(36)}`,
+            player,
+            config: { type: 'midi', subtype: null, parameters: {} },
+            // A player can put twelve notes a second into the mempool; a voice
+            // that stopped at the general cap would drop a third of a fast run.
+            settings: { ...getDefaultInstanceSettings(), ...entry.voice, triggerCap: 24 },
+            toneObjects: null,
+            heardAt: Date.now(),
+            sound: entry.sound,
+        };
+        remoteInstances.push(instance);
+        initializeToneForInstance(instance).catch((err) => {
+            console.warn('Could not build a voice for', player, err);
+            releaseRemoteVoice(instance);
+        });
+        return null;
+    }
+
+    instance.heardAt = Date.now();
+    // Every note carries its player's whole sound, so this is almost always a
+    // no-op. Only an actual change reaches Tone.
+    if (instance.sound !== entry.sound) {
+        instance.sound = entry.sound;
+        applyVoice(instance, entry.voice);
+    }
+    return instance.toneObjects ? instance : null;
+}
+
+function routeMidiNote(carried, txData) {
+    const player = txData?.txn?.arcv ?? null;
+    // Only one browser sent this note, and only that browser can say how long
+    // the round trip took. Claimed once, so a second card doesn't re-report it.
+    const roundTrip = claimRoundTrip(txData?.txn?.xaid);
+    const opts = {
+        semitoneOffset: carried.midiNote - MIDI_MIDDLE_C,
+        velocity: Math.max(0.05, Math.min(1, carried.velocity / 127)),
+    };
+
+    // Your own notes belong to your own card. That is where the sound you are
+    // designing lives, and the LED that tells you the mempool heard you.
+    const mine = player !== null && activeSynths.some(
+        (i) => i.config.type === 'midi' && i.config.parameters?.player === player
+    );
+
+    if (mine) {
+        let matched = 0;
+        activeSynths.forEach((instance) => {
+            if (instance.config.type !== 'midi') return;
+            if (instance.config.parameters?.player !== player) return;
+            if (!instance.toneObjects) return;
+            triggerInstanceWithRateLimit(instance, matched * 0.010, opts);
+            matched++;
+        });
+        if (roundTrip !== null) reportMidiRoundTrip(roundTrip);
+        return;
+    }
+
+    // Everyone else goes to the pool, in the sound they designed. A card never
+    // plays another player's notes: hearing four people through one card's
+    // voice was only ever a stand-in for not having their voices yet.
+    if (!remoteVoicesEnabled) return;
+    if (soloPlayer && soloPlayer !== player) return;
+
+    // Anonymous notes carry no address, so they all share one slot and the
+    // house sound. There is nowhere else to file a player with no name.
+    const key = player ?? ANONYMOUS_PLAYER;
+    const entry = playerVoices.get(key) ?? { voice: getDefaultInstanceSettings(), sound: 'default' };
+    const voice = remoteVoiceFor(key, entry);
+    if (voice) triggerInstanceWithRateLimit(voice, 0, opts);
+    if (roundTrip !== null) reportMidiRoundTrip(roundTrip);
 }
 
 const playTransactionSoundWithUI = (instance, timeOffset = 0, opts = {}) => {
@@ -2020,6 +2283,81 @@ export async function bootLegacySynth() {
     renderParameterArea(newInstance.id, null, null);
   });
 
+  // Hearing other people is an instrument-wide question, not a per-card one:
+  // their notes arrive with their own sound, so there is no card whose voice
+  // the choice belongs to.
+  const toggleOthersBtn = document.getElementById('toggle-others-btn');
+  const othersFilter = document.getElementById('others-filter');
+
+  toggleOthersBtn?.addEventListener('click', () => {
+    setRemoteVoicesEnabled(!areRemoteVoicesEnabled());
+    const on = areRemoteVoicesEnabled();
+    // State in the label, the same way its neighbour says Mode: Single — the
+    // buttons in this bar all share one fill, so a colour would say nothing.
+    toggleOthersBtn.textContent = on ? 'Others: on' : 'Others: off';
+    // A filter over playing nobody hears is a control that does nothing.
+    if (othersFilter) othersFilter.disabled = !on;
+  });
+
+  othersFilter?.addEventListener('change', async () => {
+    const typed = othersFilter.value.trim();
+    if (typed === '') {
+      setSoloPlayer('');
+      othersFilter.classList.remove('invalid-address');
+      othersFilter.title = 'Hear only this player — an address or a name.algo. Blank hears everyone.';
+      return;
+    }
+    if (looksLikeNfd(typed)) {
+      othersFilter.classList.remove('invalid-address');
+      othersFilter.title = 'looking up…';
+      try {
+        const { name, address } = await resolveNfd(typed);
+        setSoloPlayer(address);
+        othersFilter.value = name;
+        othersFilter.title = address;
+      } catch (err) {
+        setSoloPlayer('');
+        othersFilter.classList.add('invalid-address');
+        othersFilter.title = String(err?.message ?? err);
+      }
+      return;
+    }
+    const valid = isValidPlayer(typed);
+    othersFilter.classList.toggle('invalid-address', !valid);
+    othersFilter.title = valid ? typed : 'Not an Algorand address';
+    setSoloPlayer(valid ? typed : '');
+  });
+
+  // A MIDI card is built here rather than picked from the Type menu: it is not
+  // a filter over the feed like the others, and putting it in that menu would
+  // offer it to every card and add a counter that never moves for anyone who
+  // isn't playing.
+  document.getElementById('add-midi')?.addEventListener('click', async () => {
+    const uniqueId = `synth-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const newInstance = {
+        id: uniqueId,
+        config: { type: 'midi', subtype: null, parameters: { player: '' } },
+        settings: {
+            ...getDefaultInstanceSettings(),
+            // Middle C is the hinge the incoming offsets are measured from, so
+            // the card's base note is what middle C will sound like.
+            baseNote: 'C4',
+            // Polyphonic and a little longer than a mempool blip: chords arrive
+            // as a group, and a note you played deserves to ring.
+            engine: 'polysynth',
+            noteDuration: 0.4,
+            // A held chord is not a busy mempool. The general cap would eat it.
+            triggerCap: 24,
+        },
+        toneObjects: null
+    };
+    activeSynths.push(newInstance);
+
+    synthContainer.insertAdjacentHTML('beforeend', createSynthHTML(newInstance));
+    await initializeToneForInstance(newInstance);
+    renderParameterArea(uniqueId, 'midi', null);
+  });
+
   // Attach main control listeners
   startBtn.addEventListener('click', async () => {
     try { await unlockIOSAudioOnce?.(); } catch {}
@@ -2553,6 +2891,167 @@ async function handleEngineChangeLogic(instanceId, engine, synthElement) {
     await rebuildVoice(instance);
 }
 
+// --- MIDI card ------------------------------------------------------------
+
+// The last round trip this browser measured: the time between putting a note
+// into the mempool and hearing it come back. It is the honest latency of the
+// instrument, so it is shown rather than hidden.
+let midiLastRoundTrip = null;
+let midiEscrowBalance = null;
+
+function reportMidiRoundTrip(ms) {
+    midiLastRoundTrip = ms;
+    refreshMidiStatus();
+}
+
+function refreshMidiStatus() {
+    const balance = midiEscrowBalance === null ? '—' : `${(midiEscrowBalance / 1e6).toFixed(3)} ALGO`;
+    const trip = midiLastRoundTrip === null ? 'unheard' : `${midiLastRoundTrip} ms round trip`;
+    const stats = getMidiStats();
+    const trouble = stats.failed ? ` · ${stats.failed} rejected` : '';
+    const text = `escrow: ${balance} · ${trip}${trouble}`;
+    activeSynths.forEach((instance) => {
+        if (instance.config.type !== 'midi') return;
+        const el = document.getElementById(`${instance.id}-midi-status`);
+        if (el) el.textContent = text;
+    });
+}
+
+async function initializeMidiCard(instanceId) {
+    const select = document.getElementById(`${instanceId}-midi-device`);
+    const status = document.getElementById(`${instanceId}-midi-status`);
+
+    getKeyboardBalance().then((micro) => {
+        midiEscrowBalance = micro;
+        refreshMidiStatus();
+    });
+
+    if (!midiSupported()) {
+        if (select) select.disabled = true;
+        if (status) status.textContent = 'This browser has no Web MIDI — try Chrome, Edge or Firefox.';
+        return;
+    }
+
+    try {
+        const inputs = await listMidiInputs();
+        if (!select) return;
+        for (const input of inputs) {
+            const option = document.createElement('option');
+            option.value = input.id;
+            option.textContent = input.name;
+            select.appendChild(option);
+        }
+        if (inputs.length === 0 && status) status.textContent = 'No MIDI devices found. Plug one in.';
+        // Devices come and go; the list should not go stale in front of you.
+        onMidiPortChange(() => {
+            const chosen = select.value;
+            listMidiInputs().then((current) => {
+                select.innerHTML = '<option value="">(none)</option>';
+                for (const input of current) {
+                    const option = document.createElement('option');
+                    option.value = input.id;
+                    option.textContent = input.name;
+                    option.selected = input.id === chosen;
+                    select.appendChild(option);
+                }
+            });
+        });
+    } catch (err) {
+        if (status) status.textContent = `MIDI unavailable: ${err.message}`;
+    }
+}
+
+function handleMidiDeviceChange(instanceId, inputId) {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    if (!inputId) {
+        bindMidiInput(null, null);
+        return;
+    }
+    // One keyboard plays into one escrow, so binding is global: two cards
+    // holding the same device would send every keypress twice and pay for it
+    // twice. Listening stays per-card — that is what more than one is for —
+    // so the other cards keep working, they just stop being where you play
+    // from, and their menus say so instead of quietly lying.
+    activeSynths.forEach((other) => {
+        if (other.id === instanceId || other.config.type !== 'midi') return;
+        const select = document.getElementById(`${other.id}-midi-device`);
+        if (select) select.value = '';
+    });
+    bindMidiInput(inputId, (midiNote, velocity) => {
+        const player = instance.config.parameters?.player?.trim();
+        // Fire and forget: the note is not heard when it is sent, it is heard
+        // when it comes back, so there is nothing to wait for here.
+        sendNote(midiNote, velocity, player, voiceForNextNote(instance)).then((xaid) => {
+            if (xaid === null) refreshMidiStatus();
+        });
+    });
+}
+
+// What sits under an address field: the account a name turned out to mean. A
+// field that stamps an identity onto transactions should never leave you
+// guessing which account it settled on.
+function describeResolved(address, name) {
+    if (!address || !name) return '';
+    return `${ellipseAddress(address, 5)}`;
+}
+
+async function handleMidiAddressChange(instanceId, key, value) {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    if (!instance.config.parameters) instance.config.parameters = {};
+    const params = instance.config.parameters;
+    const typed = value.trim();
+    const input = document.getElementById(`${instanceId}-midi-${key}`);
+    const resolvedEl = document.getElementById(`${instanceId}-midi-${key}-resolved`);
+    const setNote = (text, bad = false) => {
+        if (!resolvedEl) return;
+        resolvedEl.textContent = text;
+        resolvedEl.classList.toggle('resolve-failed', bad);
+    };
+
+    if (typed === '') {
+        params[key] = '';
+        params[`${key}Name`] = '';
+        input?.classList.remove('invalid-address');
+        setNote('');
+        return;
+    }
+
+    if (looksLikeNfd(typed)) {
+        input?.classList.remove('invalid-address');
+        setNote('looking up…');
+        try {
+            const { name, address } = await resolveNfd(typed);
+            params[key] = address;
+            params[`${key}Name`] = name;
+            // The name is what you typed and what you want to keep seeing; the
+            // address is what actually goes on the transaction, so show both.
+            if (input) {
+                input.value = name;
+                input.title = address;
+            }
+            setNote(describeResolved(address, name));
+        } catch (err) {
+            // A name that resolves to nothing must not quietly leave the last
+            // address in place, or you carry on playing as someone else.
+            params[key] = '';
+            params[`${key}Name`] = '';
+            input?.classList.add('invalid-address');
+            setNote(String(err?.message ?? err).replace(/^Error:\s*/, ''), true);
+        }
+        return;
+    }
+
+    // A plain address. Flagged on the spot rather than at the first keypress,
+    // when the note has already gone somewhere unintended.
+    params[key] = typed;
+    params[`${key}Name`] = '';
+    if (input) input.title = '';
+    setNote('');
+    if (input) input.classList.toggle('invalid-address', !isValidPlayer(typed));
+}
+
 const handleContainerClick = (e) => {
     const target = e.target;
     // Find the closest parent synth element to get the instance ID
@@ -2607,6 +3106,10 @@ const handleContainerChange = (e) => {
         handleLfoDestinationChangeLogic(instanceId, target.value);
     } else if (target.matches('.value-input')) {
         handleTypedValue(instanceId, target);
+    } else if (target.matches('.midi-device-select')) {
+        handleMidiDeviceChange(instanceId, target.value);
+    } else if (target.matches('.midi-player-input')) {
+        handleMidiAddressChange(instanceId, 'player', target.value);
     }
 };
 
@@ -2812,6 +3315,11 @@ const handleCloseLogic = (instanceId, synthElement) => {
 
         // Handle UI-specific cleanup first
         stopStateProofCountdown(instanceId);
+        // A closed card must not keep a keyboard bound, or notes carry on
+        // going out to an instrument that is no longer on screen.
+        if (activeSynths[index].config.type === 'midi') {
+            bindMidiInput(null, null);
+        }
         // Then dispose synthesis objects
         disposeSynth(instanceId, activeSynths);
         activeSynths.splice(index, 1);
@@ -3409,6 +3917,30 @@ function renderParameterArea(instanceId, type, subtype) {
 
         // Initialize the countdown asynchronously
         initializeStateProofCountdown(instanceId);
+        return;
+    }
+
+    // The MIDI card: a device to play from, a name to play under, and a choice
+    // of whose playing to sound. No transaction filter, because the only thing
+    // it ever listens for is a note.
+    if (type === 'midi') {
+        const params = instance.config.parameters ?? {};
+        paramHTML += `
+            <div class="param-control">
+                <label for="${instanceId}-midi-device">Device:</label>
+                <select id="${instanceId}-midi-device" class="midi-device-select" data-instance-id="${instanceId}">
+                    <option value="">(none)</option>
+                </select>
+            </div>
+            <div class="param-control">
+                <label for="${instanceId}-midi-player">Play as:</label>
+                <input type="text" id="${instanceId}-midi-player" class="midi-player-input text-input" placeholder="address or name.algo" value="${params.playerName || params.player || ''}" data-instance-id="${instanceId}" title="Stamped on every note you send, so others can pick your playing out. Costs nothing — a zero transfer never touches the receiving account.">
+            </div>
+            <div class="midi-resolved" id="${instanceId}-midi-player-resolved">${describeResolved(params.player, params.playerName)}</div>
+            <div class="midi-status" id="${instanceId}-midi-status">reading the escrow…</div>
+        `;
+        paramArea.innerHTML = paramHTML;
+        initializeMidiCard(instanceId);
         return;
     }
 
