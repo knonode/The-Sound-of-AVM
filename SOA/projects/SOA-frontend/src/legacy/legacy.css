@@ -1328,7 +1328,18 @@
             font-size: 9px;
             color: #43b38d;
             font-family: 'Courier New', monospace;
-            min-height: 11px;
+        }
+        /* Empty means answered and done with — it must take no height at all,
+           or the confirmation costs a line for the rest of the session. */
+        .midi-resolved:empty {
+            display: none;
+        }
+
+        /* The only labelled row left on this card, so it has nothing to line up
+           with. A fixed column just pushed the input around as the card
+           narrowed. */
+        .param-control label.midi-play-as {
+            flex-basis: auto;
         }
         .midi-resolved.resolve-failed {
             color: #e08a5a;

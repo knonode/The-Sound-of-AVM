@@ -477,9 +477,10 @@ export const GUIDE_SECTIONS = [
       holding a program that will only ever sign one shape of transaction, so anyone who
       has it can play — at the same time as you, with no server in between. Each note
       costs the minimum fee, 0.001 ALGO, out of that shared balance.</p>
-      <p>The card shows what's left of it. <strong>Click the balance to copy the escrow
-      address</strong>, and send ALGO there when it runs low — a thousand notes to the
-      ALGO. Anyone can top it up and anyone can spend it, so keep it small.</p>
+      <p><strong>bal.</strong> on the card is what's left of it, and <strong>lat.</strong>
+      is how long a note is taking to come back. <strong>Click that line to copy the
+      escrow address</strong>, and send ALGO there when it runs low — a thousand notes to
+      the ALGO. Anyone can top it up and anyone can spend it, so keep it small.</p>
       <p>The second dropdown in the header is the <strong>channel</strong>. Leave it on
       <em>all</em> for a device that sends on one. For one that sends several tracks at
       once — a groovebox, a sequencer — add a card per track and give each its own

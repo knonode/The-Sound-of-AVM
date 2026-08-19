@@ -2974,12 +2974,13 @@ function stopEscrowWatchIfUnwatched() {
 }
 
 function refreshMidiStatus() {
-    // A card is about twenty-eight characters wide at this size, so each fact
-    // gets its own short line rather than a long one that wraps mid-phrase.
-    const balance = midiEscrowBalance === null ? '—' : `${(midiEscrowBalance / 1e6).toFixed(3)} ALGO`;
-    const trip = midiLastRoundTrip === null ? 'unheard' : `${midiLastRoundTrip} ms`;
+    // Abbreviated because the card is about twenty-eight characters wide at this
+    // size, and two facts about the instrument on one line is worth more than
+    // two spelled-out labels on two.
+    const balance = midiEscrowBalance === null ? '—' : `${(midiEscrowBalance / 1e6).toFixed(3)}`;
+    const latency = midiLastRoundTrip === null ? '—' : `${midiLastRoundTrip}ms`;
     const stats = getMidiStats();
-    const lines = [`escrow: ${balance}`, `round trip: ${trip}`];
+    const lines = [`bal. ${balance} · lat. ${latency}`];
 
     // What the hat holds is everyone's; what you have spent is yours. An
     // arpeggiator or a running sequencer bills you a note at a time without a
@@ -3005,7 +3006,7 @@ function refreshMidiStatus() {
         const el = document.getElementById(`${instance.id}-midi-status`);
         if (!el || el.dataset.flashing === 'true') return;
         el.textContent = text;
-        el.title = `Escrow ${escrow}\nClick to copy — top it up to keep playing`;
+        el.title = `bal. is the escrow balance; lat. is how long a note takes to come back.\n\nEscrow ${escrow}\nClick to copy — top it up to keep playing.`;
     });
 }
 
@@ -3146,10 +3147,17 @@ async function handleMidiAddressChange(instanceId, key, value) {
     const typed = value.trim();
     const input = document.getElementById(`${instanceId}-midi-${key}`);
     const resolvedEl = document.getElementById(`${instanceId}-midi-${key}-resolved`);
+    // A resolved address is a confirmation, not a readout: it answers "which
+    // account did that name mean" once and then costs height forever. Successes
+    // clear themselves; a failure stays, because it is still true.
     const setNote = (text, bad = false) => {
         if (!resolvedEl) return;
+        clearTimeout(resolvedEl._clearTimer);
         resolvedEl.textContent = text;
         resolvedEl.classList.toggle('resolve-failed', bad);
+        if (text && !bad) {
+            resolvedEl._clearTimer = setTimeout(() => { resolvedEl.textContent = ''; }, 4000);
+        }
     };
 
     if (typed === '') {
@@ -4075,10 +4083,10 @@ function renderParameterArea(instanceId, type, subtype) {
         // card's height is the most expensive thing in a layout.
         paramHTML += `
             <div class="param-control">
-                <label for="${instanceId}-midi-player">Play as:</label>
+                <label class="midi-play-as" for="${instanceId}-midi-player">Play as:</label>
                 <input type="text" id="${instanceId}-midi-player" class="midi-player-input text-input" placeholder="address or name.algo" value="${params.playerName || params.player || ''}" data-instance-id="${instanceId}" title="Stamped on every note you send, so others can pick your playing out. Costs nothing — a zero transfer never touches the receiving account.">
             </div>
-            <div class="midi-resolved" id="${instanceId}-midi-player-resolved">${describeResolved(params.player, params.playerName)}</div>
+            <div class="midi-resolved" id="${instanceId}-midi-player-resolved"></div>
             <div class="midi-status" id="${instanceId}-midi-status" data-instance-id="${instanceId}">reading the escrow…</div>
         `;
         paramArea.innerHTML = paramHTML;
