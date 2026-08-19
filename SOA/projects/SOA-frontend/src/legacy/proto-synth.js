@@ -597,7 +597,12 @@ const createSynthHTML = (synthInstance) => {
     const headerHTML = config.type === 'midi' ? `
         <div class="synth-header">
             <div class="led" id="led-${uniqueId}" title="click to test this sound"></div>
-            <span class="midi-card-title" title="Notes played into the mempool as zero-amount transfers of an asset that does not exist">MIDI</span>
+            <select id="${uniqueId}-midi-device" class="midi-device-select" data-instance-id="${uniqueId}" title="Which MIDI device this card plays from">
+                <option value="">MIDI</option>
+            </select>
+            <select id="${uniqueId}-midi-channel" class="midi-channel-select" data-instance-id="${uniqueId}" title="Which MIDI channel this card plays. One card per channel turns a multi-track device into separate parts, each with its own sound.">
+                ${midiChannelOptions(config.parameters?.channel ?? 0)}
+            </select>
             <button class="mute-btn" data-instance-id="${uniqueId}" title="Mute/Unmute Synth">${settings.muted ? svgIconMuted : svgIconUnmuted}</button>
             <button class="close-btn" data-instance-id="${uniqueId}" title="Remove Synth">×</button>
         </div>
@@ -2991,11 +2996,32 @@ function refreshMidiStatus() {
     if (stats.failed) lines.push(`${stats.failed} rejected`);
 
     const text = lines.join('\n');
+    // The address has to be reachable from the card: it is the only way anyone
+    // can put money in the hat, and it is too long to show without spending a
+    // line on it. The tooltip holds it, a click copies it.
+    const escrow = getKeyboardAddress();
     activeSynths.forEach((instance) => {
         if (instance.config.type !== 'midi') return;
         const el = document.getElementById(`${instance.id}-midi-status`);
-        if (el) el.textContent = text;
+        if (!el || el.dataset.flashing === 'true') return;
+        el.textContent = text;
+        el.title = `Escrow ${escrow}\nClick to copy — top it up to keep playing`;
     });
+}
+
+async function copyEscrowAddress(el) {
+    const address = getKeyboardAddress();
+    try {
+        await navigator.clipboard.writeText(address);
+    } catch {
+        return; // a browser that refuses the clipboard still has the tooltip
+    }
+    el.dataset.flashing = 'true';
+    el.textContent = 'escrow address copied';
+    setTimeout(() => {
+        delete el.dataset.flashing;
+        refreshMidiStatus();
+    }, 1400);
 }
 
 async function initializeMidiCard(instanceId) {
@@ -3195,6 +3221,8 @@ const handleContainerClick = (e) => {
         handleOctaveChangeLogic(instanceId, -1);
     } else if (target.matches('.octave-up')) {
         handleOctaveChangeLogic(instanceId, 1);
+    } else if (target.matches('.midi-status')) {
+        copyEscrowAddress(target);
     } else if (target.matches('.keyreg-toggle')) {
         handleKeyregToggleLogic(instanceId, target);
     }
@@ -4043,25 +4071,15 @@ function renderParameterArea(instanceId, type, subtype) {
     // it ever listens for is a note.
     if (type === 'midi') {
         const params = instance.config.parameters ?? {};
+        // Device and channel live in the header, where they cost no height. A
+        // card's height is the most expensive thing in a layout.
         paramHTML += `
-            <div class="param-control">
-                <label for="${instanceId}-midi-device">Device:</label>
-                <select id="${instanceId}-midi-device" class="midi-device-select" data-instance-id="${instanceId}">
-                    <option value="">(none)</option>
-                </select>
-            </div>
-            <div class="param-control">
-                <label for="${instanceId}-midi-channel">Channel:</label>
-                <select id="${instanceId}-midi-channel" class="midi-channel-select" data-instance-id="${instanceId}" title="Which MIDI channel this card plays. One card per channel turns a groovebox's tracks into separate parts, each with its own sound.">
-                    ${midiChannelOptions(params.channel ?? 0)}
-                </select>
-            </div>
             <div class="param-control">
                 <label for="${instanceId}-midi-player">Play as:</label>
                 <input type="text" id="${instanceId}-midi-player" class="midi-player-input text-input" placeholder="address or name.algo" value="${params.playerName || params.player || ''}" data-instance-id="${instanceId}" title="Stamped on every note you send, so others can pick your playing out. Costs nothing — a zero transfer never touches the receiving account.">
             </div>
             <div class="midi-resolved" id="${instanceId}-midi-player-resolved">${describeResolved(params.player, params.playerName)}</div>
-            <div class="midi-status" id="${instanceId}-midi-status">reading the escrow…</div>
+            <div class="midi-status" id="${instanceId}-midi-status" data-instance-id="${instanceId}">reading the escrow…</div>
         `;
         paramArea.innerHTML = paramHTML;
         initializeMidiCard(instanceId);

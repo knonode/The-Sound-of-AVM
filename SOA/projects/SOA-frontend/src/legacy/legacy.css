@@ -1273,24 +1273,35 @@
         }
 
         /* --- MIDI card --- */
-        /* The name holds the space the Type and Sub selects occupy on every
-           other card. It is not a control, so it should not look like one. */
-        .synth-header .midi-card-title {
-            flex-grow: 1;
-            font-size: 10px;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
+        /* Device and channel sit where Type and Sub do on every other card, and
+           are sized to match them. They live in the header because a card's
+           height is the most expensive thing in a layout, and the header has
+           the room already. */
+        .synth-header .midi-device-select,
+        .synth-header .midi-channel-select {
+            flex-grow: 0;
+            flex-shrink: 1;
+            flex-basis: auto;
+            background-color: rgba(0, 0, 0, 0.2);
             color: #029e0a;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            border: 1px solid #004d4d;
+            padding: 1px 2px;
+            border-radius: 3px;
+            font-size: 10px;
+            box-sizing: border-box;
+        }
+        .synth-header .midi-device-select {
+            max-width: 78px; /* device names are long; the tooltip carries the rest */
+            min-width: 45px;
+        }
+        .synth-header .midi-channel-select {
+            max-width: 46px;
+            min-width: 34px;
         }
 
         /* Same look as .param-input, without the class — that one is also how
            the delegated change handler recognises a transaction filter, and
-           these are not. */
-        .midi-device-select,
-        .midi-channel-select,
+           this is not. */
         .midi-player-input {
             width: 100%;
             min-width: 0;
@@ -1329,8 +1340,10 @@
             color: #43b38d;
             font-family: 'Courier New', monospace;
             text-align: center;
-            /* Two lines: the shared hat, then your own spend. */
+            /* The shared escrow, then your own spend. */
             white-space: pre-line;
             line-height: 1.5;
+            /* It carries the escrow address, and hands it over on a click. */
+            cursor: pointer;
         }
 

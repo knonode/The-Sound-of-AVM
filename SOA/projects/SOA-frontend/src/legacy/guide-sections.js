@@ -465,10 +465,10 @@ export const GUIDE_SECTIONS = [
     state: 'midi',
     body: `
       <p>Everything else here listens to the mempool. This card plays. Plug in a MIDI
-      device — a keyboard, pads, a wind controller — and pick it under
-      <strong>Device</strong>. Every note you play becomes a real Algorand transaction:
-      a zero-amount transfer of an asset that doesn't exist, where the asset ID is the
-      note and how hard you hit it.</p>
+      device — a keyboard, pads, a wind controller — and pick it from the first dropdown
+      in the card header, which reads <strong>MIDI</strong> until you do. Every note you
+      play becomes a real Algorand transaction: a zero-amount transfer of an asset that
+      doesn't exist, where the asset ID is the note and how hard you hit it.</p>
       <p>You won't hear a note when you play it. You'll hear it when it comes back to
       you out of the mempool, most of a second later, and gossip makes no promise about
       the order. That delay is the instrument. Slow, spread-out, chordal playing sounds
@@ -477,12 +477,14 @@ export const GUIDE_SECTIONS = [
       holding a program that will only ever sign one shape of transaction, so anyone who
       has it can play — at the same time as you, with no server in between. Each note
       costs the minimum fee, 0.001 ALGO, out of that shared balance.</p>
-      <p><strong>Channel</strong> is which MIDI channel this card listens to. Leave it
-      on <em>all</em> for a device that sends on one channel. For one that sends
-      several tracks at once —
-      a groovebox, a sequencer — add one card per track and give each its own channel.
-      Each card has its own sound, and each track arrives as a separate instrument. Up
-      to eight.</p>
+      <p>The card shows what's left of it. <strong>Click the balance to copy the escrow
+      address</strong>, and send ALGO there when it runs low — a thousand notes to the
+      ALGO. Anyone can top it up and anyone can spend it, so keep it small.</p>
+      <p>The second dropdown in the header is the <strong>channel</strong>. Leave it on
+      <em>all</em> for a device that sends on one. For one that sends several tracks at
+      once — a groovebox, a sequencer — add a card per track and give each its own
+      channel. Each card has its own sound, and each track arrives as a separate
+      instrument. Up to eight.</p>
       <p><strong>Play as</strong> is how anyone tells your playing apart from anyone
       else's. An address or an NFD <code>name.algo</code>. Leave it empty to play
       anonymously — but then your sound can't travel, since there's no name to
