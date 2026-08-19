@@ -52,7 +52,9 @@ import {
     sendNote,
     claimRoundTrip,
     listMidiInputs,
-    bindMidiInput,
+    bindMidiCard,
+    unbindMidiCard,
+    PARTS,
     onMidiPortChange,
     midiSupported,
     isValidPlayer,
@@ -1071,10 +1073,10 @@ const startTransactionStream = async () => {
             const carried = decodeNote(xaid);
             if (carried) {
                 // A note's own field usually holds eight random bytes, but it
-                // is where a player's sound rides when it has changed. Read it
-                // before the note sounds, so the note it arrived with is
-                // already in the right voice.
-                receiveCarriedVoice(txData);
+                // is where a player's sound rides. Read it before the note
+                // sounds, so the note it arrived with is already in the right
+                // voice.
+                receiveCarriedVoice(txData, carried.part);
                 routeMidiNote(carried, txData);
             }
         }
@@ -1381,6 +1383,7 @@ const MIDI_MIDDLE_C = 60;
 // their notes, which is the only thing that tells two players apart: the sender
 // is the escrow for everybody.
 const playerVoices = new Map();
+const voiceKey = (player, part) => `${player}#${part}`;
 
 /** How many players have announced a voice, for the UI to report. */
 export const knownVoiceCount = () => playerVoices.size;
@@ -1391,8 +1394,8 @@ export const getPlayerVoice = (address) => playerVoices.get(address)?.voice ?? n
 // end-to-end test can watch a voice arrive over the real relay.
 if (typeof window !== 'undefined') {
     window.SOA_MIDI = {
-        voices: () => Array.from(playerVoices, ([player, entry]) => ({ player, heardAt: entry.heardAt, voice: entry.voice })),
-        playing: () => remoteInstances.map((r) => ({ player: r.player, engine: r.settings.engine, built: !!r.toneObjects })),
+        voices: () => Array.from(playerVoices, ([key, entry]) => ({ key, player: entry.player, part: entry.part, heardAt: entry.heardAt, voice: entry.voice })),
+        playing: () => remoteInstances.map((r) => ({ player: r.player, part: r.part, engine: r.settings.engine, built: !!r.toneObjects })),
         spend: () => {
             const stats = getMidiStats();
             return { ...stats, algo: (stats.sent * NOTE_FEE_MICROALGOS) / 1e6 };
@@ -1400,7 +1403,7 @@ if (typeof window !== 'undefined') {
     };
 }
 
-function receiveCarriedVoice(txData) {
+function receiveCarriedVoice(txData, part = 0) {
     const player = txData?.txn?.arcv;
     const carried = txData?.txn?.note;
     // An announcement with no address says "somebody sounds like this", which
@@ -1421,13 +1424,17 @@ function receiveCarriedVoice(txData) {
     // is the sound already on file. Comparing here means a voice is only ever
     // *applied* when it actually changed — the graph rebuild that costs
     // anything happens on a knob turn, not on a keypress.
-    const known = playerVoices.get(player);
+    // Keyed by player *and* part: one performer sending four tracks is still one
+    // performer, but their tracks are four instruments and must not overwrite
+    // each other's sound.
+    const key = voiceKey(player, part);
+    const known = playerVoices.get(key);
     const sound = voiceFingerprint(voice);
     if (known?.sound === sound) {
         known.heardAt = Date.now();
         return;
     }
-    playerVoices.set(player, { voice, sound, heardAt: Date.now(), changed: true });
+    playerVoices.set(key, { voice, sound, player, part, heardAt: Date.now() });
 }
 
 /**
@@ -1496,8 +1503,8 @@ function releaseAllRemoteVoices() {
  * being built, so the note that triggered the build is simply the one that
  * doesn't get their sound.
  */
-function remoteVoiceFor(player, entry) {
-    let instance = remoteInstances.find((r) => r.player === player);
+function remoteVoiceFor(key, entry, player) {
+    let instance = remoteInstances.find((r) => r.key === key);
 
     if (!instance) {
         // Slots are finite because each one is a full effects chain rendering
@@ -1507,8 +1514,12 @@ function remoteVoiceFor(player, entry) {
             releaseRemoteVoice(quietest);
         }
         instance = {
-            id: `remote-${player.slice(0, 8)}-${Date.now().toString(36)}`,
+            id: `remote-${key.slice(0, 10)}-${Date.now().toString(36)}`,
+            key,
+            // The key separates a player's parts; the player is who they are,
+            // which is what the "hear one player" filter asks about.
             player,
+            part: entry.part ?? 0,
             config: { type: 'midi', subtype: null, parameters: {} },
             // A player can put twelve notes a second into the mempool; a voice
             // that stopped at the general cap would drop a third of a fast run.
@@ -1519,7 +1530,7 @@ function remoteVoiceFor(player, entry) {
         };
         remoteInstances.push(instance);
         initializeToneForInstance(instance).catch((err) => {
-            console.warn('Could not build a voice for', player, err);
+            console.warn('Could not build a voice for', key, err);
             releaseRemoteVoice(instance);
         });
         return null;
@@ -1542,7 +1553,7 @@ function routeMidiNote(carried, txData) {
     const roundTrip = claimRoundTrip(txData?.txn?.xaid);
     const opts = {
         semitoneOffset: carried.midiNote - MIDI_MIDDLE_C,
-        velocity: Math.max(0.05, Math.min(1, carried.velocity / 127)),
+        velocity: Math.max(0.05, Math.min(1, carried.velocity)),
     };
 
     // Your own notes belong to your own card. That is where the sound you are
@@ -1556,6 +1567,9 @@ function routeMidiNote(carried, txData) {
         activeSynths.forEach((instance) => {
             if (instance.config.type !== 'midi') return;
             if (instance.config.parameters?.player !== player) return;
+            // The card that sent this part is the card that sounds it. Without
+            // this, four cards on one address would each play every track.
+            if (cardPart(instance) !== carried.part) return;
             if (!instance.toneObjects) return;
             triggerInstanceWithRateLimit(instance, matched * 0.010, opts);
             matched++;
@@ -1572,9 +1586,9 @@ function routeMidiNote(carried, txData) {
 
     // Anonymous notes carry no address, so they all share one slot and the
     // house sound. There is nowhere else to file a player with no name.
-    const key = player ?? ANONYMOUS_PLAYER;
+    const key = voiceKey(player ?? ANONYMOUS_PLAYER, carried.part);
     const entry = playerVoices.get(key) ?? { voice: getDefaultInstanceSettings(), sound: 'default' };
-    const voice = remoteVoiceFor(key, entry);
+    const voice = remoteVoiceFor(key, entry, player ?? ANONYMOUS_PLAYER);
     if (voice) triggerInstanceWithRateLimit(voice, 0, opts);
     if (roundTrip !== null) reportMidiRoundTrip(roundTrip);
 }
@@ -3005,6 +3019,10 @@ async function initializeMidiCard(instanceId) {
             option.textContent = input.name;
             select.appendChild(option);
         }
+        // The device list arrives after the card is drawn, so a card that
+        // already had one selected has to be given it back.
+        const held = findInstance(instanceId)?._midiDevice;
+        if (held) select.value = held;
         if (inputs.length === 0 && status) status.textContent = 'No MIDI devices found. Plug one in.';
         // Devices come and go; the list should not go stale in front of you.
         onMidiPortChange(() => {
@@ -3025,29 +3043,65 @@ async function initializeMidiCard(instanceId) {
     }
 }
 
-function handleMidiDeviceChange(instanceId, inputId) {
+/**
+ * Point a card at a device and a channel. Several cards may hold the same
+ * keyboard on different channels — that is how a groovebox's tracks become
+ * separate parts, each with its own sound, from one player.
+ */
+function rebindMidiCard(instanceId) {
     const instance = findInstance(instanceId);
-    if (!instance) return;
+    if (!instance || instance.config.type !== 'midi') return;
+    // The device is session state, not layout: its id means nothing on another
+    // machine, so it lives on the instance and stays out of saved presets. The
+    // channel is a musical decision about which part this card plays, so it
+    // belongs in the layout and is saved with it.
+    const inputId = instance._midiDevice ?? '';
     if (!inputId) {
-        bindMidiInput(null, null);
+        unbindMidiCard(instanceId);
         return;
     }
-    // One keyboard plays into one escrow, so binding is global: two cards
-    // holding the same device would send every keypress twice and pay for it
-    // twice. Listening stays per-card — that is what more than one is for —
-    // so the other cards keep working, they just stop being where you play
-    // from, and their menus say so instead of quietly lying.
-    activeSynths.forEach((other) => {
-        if (other.id === instanceId || other.config.type !== 'midi') return;
-        const select = document.getElementById(`${other.id}-midi-device`);
-        if (select) select.value = '';
-    });
-    bindMidiInput(inputId, (midiNote, velocity) => {
+    const channel = Number(instance.config.parameters?.channel ?? 0);
+    // A card's part is its channel, so the track you played on is the track it
+    // arrives as. Channel 0 — the whole device — is part 0.
+    const part = cardPart(instance);
+    bindMidiCard(instanceId, inputId, channel, (midiNote, velocity) => {
         const player = instance.config.parameters?.player?.trim();
         // Fire and forget: the note is not heard when it is sent, it is heard
         // when it comes back, so there is nothing to wait for here.
-        sendNote(midiNote, velocity, player, voiceForNextNote(instance)).then(refreshMidiStatus);
+        sendNote(midiNote, velocity, player, voiceForNextNote(instance), part).then(refreshMidiStatus);
     });
+}
+
+function handleMidiDeviceChange(instanceId, inputId) {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    instance._midiDevice = inputId;
+    rebindMidiCard(instanceId);
+}
+
+function handleMidiChannelChange(instanceId, channel) {
+    const instance = findInstance(instanceId);
+    if (!instance) return;
+    if (!instance.config.parameters) instance.config.parameters = {};
+    instance.config.parameters.channel = Number(channel) || 0;
+    rebindMidiCard(instanceId);
+}
+
+/** Which part a card plays. Channel 0 — the whole device — is part 0. */
+function cardPart(instance) {
+    const channel = Number(instance.config?.parameters?.channel ?? 0);
+    return channel === 0 ? 0 : (channel - 1) % PARTS;
+}
+
+// "all" takes the whole keyboard, which is what one player with one keyboard
+// wants. A numbered channel takes one track of a device that sends several, and
+// becomes the part that track arrives as.
+function midiChannelOptions(selected) {
+    const options = [`<option value="0"${Number(selected) === 0 ? ' selected' : ''}>all</option>`];
+    for (let channel = 1; channel <= PARTS; channel++) {
+        options.push(`<option value="${channel}"${Number(selected) === channel ? ' selected' : ''}>${channel}</option>`);
+    }
+    return options.join('');
 }
 
 // What sits under an address field: the account a name turned out to mean. A
@@ -3170,6 +3224,8 @@ const handleContainerChange = (e) => {
         handleTypedValue(instanceId, target);
     } else if (target.matches('.midi-device-select')) {
         handleMidiDeviceChange(instanceId, target.value);
+    } else if (target.matches('.midi-channel-select')) {
+        handleMidiChannelChange(instanceId, target.value);
     } else if (target.matches('.midi-player-input')) {
         handleMidiAddressChange(instanceId, 'player', target.value);
     }
@@ -3380,7 +3436,7 @@ const handleCloseLogic = (instanceId, synthElement) => {
         // A closed card must not keep a keyboard bound, or notes carry on
         // going out to an instrument that is no longer on screen.
         const wasMidi = activeSynths[index].config.type === 'midi';
-        if (wasMidi) bindMidiInput(null, null);
+        if (wasMidi) unbindMidiCard(instanceId);
         // Then dispose synthesis objects
         disposeSynth(instanceId, activeSynths);
         activeSynths.splice(index, 1);
@@ -3992,6 +4048,12 @@ function renderParameterArea(instanceId, type, subtype) {
                 <label for="${instanceId}-midi-device">Device:</label>
                 <select id="${instanceId}-midi-device" class="midi-device-select" data-instance-id="${instanceId}">
                     <option value="">(none)</option>
+                </select>
+            </div>
+            <div class="param-control">
+                <label for="${instanceId}-midi-channel">Channel:</label>
+                <select id="${instanceId}-midi-channel" class="midi-channel-select" data-instance-id="${instanceId}" title="Which MIDI channel this card plays. One card per channel turns a groovebox's tracks into separate parts, each with its own sound.">
+                    ${midiChannelOptions(params.channel ?? 0)}
                 </select>
             </div>
             <div class="param-control">

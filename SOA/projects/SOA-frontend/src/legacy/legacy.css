@@ -1290,6 +1290,7 @@
            the delegated change handler recognises a transaction filter, and
            these are not. */
         .midi-device-select,
+        .midi-channel-select,
         .midi-player-input {
             width: 100%;
             min-width: 0;

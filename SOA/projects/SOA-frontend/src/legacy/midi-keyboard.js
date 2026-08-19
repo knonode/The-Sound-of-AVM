@@ -55,24 +55,44 @@ export const isPatchAsset = (xaid) => xaid === PATCH_ASSET
 export const isNoteAsset = (xaid) =>
   typeof xaid === 'number' && xaid >= NOTE_BASE && xaid < NOTE_BASE + NOTE_SPAN
 
+// Each note owns a thousand asset IDs, and a keypress only ever needed a
+// velocity, so most of that slot has always been empty. It now carries the part
+// as well: eight parts of a hundred steps each. That is what lets one player
+// send four tracks of a groovebox and have them arrive as four instruments
+// rather than one merged stream, while staying one player with one name.
+//
+// The top two hundred values of every slot stay unreachable from a keyboard.
+// PATCH_ASSET lives there, and anything else that is not a note can live there
+// later — the escrow already signs those IDs, so the reserved space costs no
+// change to the program, and so no change to the instrument's address.
+export const PARTS = 8
+const PART_SPAN = 100
+const VELOCITY_STEPS = 99 // 0..99 within a part; MIDI's 128 levels are finer than a gain needs
+
+/** MIDI's 1..127 into the 0..99 a part slot has room for. */
+export const velocityToSteps = (velocity) =>
+  Math.max(0, Math.min(VELOCITY_STEPS, Math.round((velocity / 127) * VELOCITY_STEPS)))
+
+export const encodeNote = (midiNote, velocity, part = 0) =>
+  NOTE_BASE + midiNote * 1000 + part * PART_SPAN + velocityToSteps(velocity)
+
 /**
- * Pull the note back out of an asset ID. Returns null if it isn't one.
- *
- * MIDI velocity stops at 127, so the 128..999 tail of every note's slot is
- * unreachable from a keyboard. Rejecting it here keeps that space genuinely
- * reserved: the escrow will already sign those IDs, which makes them free to
- * carry something that is not a note without touching the program — and so
- * without changing the instrument's address.
+ * Pull the note back out of an asset ID. Returns null if it isn't one, which
+ * includes the reserved tail of each slot — so a voice announcement can never
+ * sound as a bogus note.
  */
 export function decodeNote(xaid) {
   if (!isNoteAsset(xaid)) return null
   const offset = xaid - NOTE_BASE
-  const velocity = offset % 1000
-  if (velocity > 127) return null
-  return { midiNote: Math.floor(offset / 1000), velocity }
+  const slot = offset % 1000
+  if (slot >= PARTS * PART_SPAN) return null
+  return {
+    midiNote: Math.floor(offset / 1000),
+    part: Math.floor(slot / PART_SPAN),
+    // Back to a 0..1 gain, which is all a velocity was ever used for here.
+    velocity: (slot % PART_SPAN) / VELOCITY_STEPS,
+  }
 }
-
-export const encodeNote = (midiNote, velocity) => NOTE_BASE + midiNote * 1000 + velocity
 
 // --- The instrument ------------------------------------------------------
 
@@ -175,7 +195,7 @@ async function submit(xaid, noteBytes, playerAddress) {
  * so the field is free space, and a listener gets the voice in the same
  * transaction as the note it applies to.
  */
-export async function sendNote(midiNote, velocity, playerAddress, voiceBytes = null) {
+export async function sendNote(midiNote, velocity, playerAddress, voiceBytes = null, part = 0) {
   const now = Date.now()
   sendLog = sendLog.filter((t) => now - t < 1000)
   if (sendLog.length >= MAX_NOTES_PER_SECOND) {
@@ -184,7 +204,7 @@ export async function sendNote(midiNote, velocity, playerAddress, voiceBytes = n
   }
   sendLog.push(now)
 
-  const xaid = encodeNote(midiNote, velocity)
+  const xaid = encodeNote(midiNote, velocity, part)
   sentAt.set(xaid, Date.now())
   const carried = voiceBytes && voiceBytes.length <= 1024 ? voiceBytes : crypto.getRandomValues(new Uint8Array(8))
   return submit(xaid, carried, playerAddress)
@@ -233,8 +253,13 @@ export async function resolveNfd(text) {
 // --- Web MIDI ------------------------------------------------------------
 
 let midiAccess = null
-let boundInput = null
-let noteOnHandler = null
+
+// One physical keyboard can feed several cards at once, each listening on its
+// own channel — that is what makes a groovebox's tracks arrive as separate
+// parts. So bindings are a registry rather than a single handler, and a device
+// carries one message listener however many cards are reading from it.
+const bindings = new Map() // cardId -> { inputId, channel, onNoteOn }
+const listening = new Set() // inputIds with a message handler attached
 
 /** True if this browser has Web MIDI at all. */
 export const midiSupported = () => typeof navigator !== 'undefined' && !!navigator.requestMIDIAccess
@@ -252,25 +277,49 @@ export async function listMidiInputs() {
   }))
 }
 
-/** Route one device's note-ons to the handler. Passing null unbinds. */
-export function bindMidiInput(inputId, onNoteOn) {
-  if (boundInput) {
-    boundInput.onmidimessage = null
-    boundInput = null
+function handleMessage(input, event) {
+  const [status, note, velocity] = event.data
+  // Note-on only. A note-off would double the cost and the traffic to control a
+  // duration that a second of jitter has already made meaningless — the synth's
+  // own gate time is a better answer. Velocity 0 is a note-off in disguise,
+  // which is why it is excluded rather than sent as silence.
+  if ((status & 0xf0) !== 0x90 || velocity === 0) return
+  const channel = (status & 0x0f) + 1
+  for (const binding of bindings.values()) {
+    if (binding.inputId !== input.id) continue
+    // Channel 0 means the card takes the whole device, which is what a
+    // single-keyboard player wants and what a groovebox player does not.
+    if (binding.channel !== 0 && binding.channel !== channel) continue
+    binding.onNoteOn(note, velocity)
   }
-  noteOnHandler = onNoteOn
+}
+
+/**
+ * Point one card at one device and channel. Passing no inputId unbinds it.
+ * Several cards may hold the same device on different channels.
+ */
+export function bindMidiCard(cardId, inputId, channel, onNoteOn) {
+  unbindMidiCard(cardId)
   if (!inputId || !midiAccess) return
   const input = midiAccess.inputs.get(inputId)
   if (!input) return
-  boundInput = input
-  input.onmidimessage = (event) => {
-    const [status, note, velocity] = event.data
-    // Note-on only. A note-off would double the cost and the traffic to control
-    // a duration that a second of jitter has already made meaningless — the
-    // synth's own gate time is a better answer. Velocity 0 is a note-off in
-    // disguise, which is why it is excluded rather than sent as silence.
-    if ((status & 0xf0) !== 0x90 || velocity === 0) return
-    noteOnHandler?.(note, velocity)
+  bindings.set(cardId, { inputId, channel, onNoteOn })
+  if (!listening.has(inputId)) {
+    input.onmidimessage = (event) => handleMessage(input, event)
+    listening.add(inputId)
+  }
+}
+
+export function unbindMidiCard(cardId) {
+  const binding = bindings.get(cardId)
+  if (!binding) return
+  bindings.delete(cardId)
+  // The last card off a device turns its listener off with it.
+  const stillWanted = [...bindings.values()].some((b) => b.inputId === binding.inputId)
+  if (!stillWanted && listening.has(binding.inputId)) {
+    const input = midiAccess?.inputs.get(binding.inputId)
+    if (input) input.onmidimessage = null
+    listening.delete(binding.inputId)
   }
 }
 

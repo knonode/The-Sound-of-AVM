@@ -23,7 +23,16 @@ const ALGOD_TOKEN = process.env.ALGOD_TOKEN ?? ''
 // refuses to sign anything outside it. 2^40 is three orders of magnitude above
 // the highest real asset ID, so it will not collide with a real ASA.
 const NOTE_BASE = 1099511627776n
-const noteToAssetId = (midiNote, velocity) => NOTE_BASE + BigInt(midiNote) * 1000n + BigInt(velocity)
+// Each note's thousand asset IDs hold the part as well as the velocity: eight
+// parts of a hundred steps, so one player can send several tracks and have them
+// arrive as separate instruments. Keep this in step with legacy/midi-keyboard.js.
+const PART_SPAN = 100n
+const VELOCITY_STEPS = 99n
+const noteToAssetId = (midiNote, velocity, part = 0) =>
+  NOTE_BASE +
+  BigInt(midiNote) * 1000n +
+  BigInt(part) * PART_SPAN +
+  BigInt(Math.round((velocity / 127) * Number(VELOCITY_STEPS)))
 
 // Who played it. The sender is the escrow for every player, so the receiver is
 // the only field that can carry an identity — and it costs nothing, because a
@@ -85,12 +94,12 @@ async function loadEscrow() {
   return new algosdk.LogicSigAccount(program)
 }
 
-function buildNote(escrowAddr, receiver, midiNote, velocity, sp, voice = null) {
+function buildNote(escrowAddr, receiver, midiNote, velocity, sp, voice = null, part = 0) {
   return algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
     sender: escrowAddr,
     receiver,
     amount: 0,
-    assetIndex: noteToAssetId(midiNote, velocity),
+    assetIndex: noteToAssetId(midiNote, velocity, part),
     // Two players striking the same key at the same velocity in the same round
     // would otherwise build byte-identical transactions, and the second would be
     // rejected as a duplicate. Eight random bytes make every note its own — or
@@ -175,7 +184,7 @@ async function main() {
       ['receiver == escrow (opt-in branch)', escrowAddr, false],
     ]
     for (const [label, receiver, expectAccepted] of shapes) {
-      const txn = buildNote(escrowAddr, receiver, 60, 100, sp)
+      const txn = buildNote(escrowAddr, receiver, 60, 100, sp)  // part 0
       try {
         const { txID } = await submit(txn, lsig)
         console.log(`${expectAccepted ? 'ok  ' : 'HUH '} ${label} -> accepted, ${txID}`)
@@ -193,9 +202,11 @@ async function main() {
 
   // A slow arpeggio. Slow because the mempool is the delay line: a round trip
   // is most of a second, and gossip does not promise to deliver in order.
+  // Two parts, alternating: a listener should build two instruments for one
+  // player, not one instrument playing both lines.
   const melody = [
-    [60, 100], [64, 90], [67, 95], [72, 110],
-    [67, 85], [64, 80], [60, 75], [55, 70],
+    [60, 100, 0], [64, 90, 1], [67, 95, 0], [72, 110, 1],
+    [67, 85, 0], [64, 80, 1], [60, 75, 0], [55, 70, 1],
   ]
   // Play under a name, the way the app does — a voice filed against nobody is
   // a voice no listener can use.
@@ -204,11 +215,11 @@ async function main() {
   console.log(`player  ${who}`)
   console.log(`voice   ${voiceBytes().length} bytes on every note`)
   console.log('')
-  for (const [midiNote, velocity] of melody) {
-    const txn = buildNote(escrowAddr, who, midiNote, velocity, sp, voiceBytes())
+  for (const [midiNote, velocity, part] of melody) {
+    const txn = buildNote(escrowAddr, who, midiNote, velocity, sp, voiceBytes(), part)
     try {
       const { txID, sentAt } = await submit(txn, lsig)
-      console.log(`${new Date(sentAt).toISOString().slice(11, 23)}  note ${midiNote} vel ${velocity}  xaid ${noteToAssetId(midiNote, velocity)}  ${txID}`)
+      console.log(`${new Date(sentAt).toISOString().slice(11, 23)}  note ${midiNote} vel ${velocity} part ${part}  xaid ${noteToAssetId(midiNote, velocity, part)}  ${txID}`)
     } catch (err) {
       console.log(`note ${midiNote} rejected: ${err.message?.split('\n')[0]}`)
     }
