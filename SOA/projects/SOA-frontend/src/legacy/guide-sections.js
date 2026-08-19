@@ -476,6 +476,11 @@ export const GUIDE_SECTIONS = [
       holding a program that will only ever sign one shape of transaction, so anyone who
       has it can play — at the same time as you, with no server in between. Each note
       costs the minimum fee, 0.001 ALGO, out of that shared balance.</p>
+      <p><strong>Channel</strong> is which MIDI channel this card listens to. Leave it
+      on <em>all</em> for one keyboard. For a device that sends several tracks at once —
+      a groovebox, a sequencer — add one card per track and give each its own channel.
+      Each card has its own sound, and each track arrives as a separate instrument. Up
+      to eight.</p>
       <p><strong>Play as</strong> is how anyone tells your playing apart from anyone
       else's. An address or an NFD <code>name.algo</code>. Leave it empty to play
       anonymously — but then your sound can't travel, since there's no name to

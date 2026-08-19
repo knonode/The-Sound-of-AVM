@@ -7,6 +7,16 @@ import { APP_VERSION } from './app-version.js'
 // version string, commit, tag. The console warning below fires if the two drift.
 export const CHANGELOG = [
   {
+    version: '0.11.0',
+    date: '2026-08-20',
+    highlights: [
+      'One keyboard can send up to eight parts. Each MIDI card picks a channel; each part arrives as its own instrument with its own sound, under your one address.',
+      'Everyone has to update for this. Notes on channels 2 to 8 are dropped by 0.10.0.',
+      'The escrow balance updates as notes are played, not only on reload.',
+      'The MIDI card shows how many notes you have sent and what they cost.',
+    ],
+  },
+  {
     version: '0.10.0',
     date: '2026-08-19',
     highlights: [
