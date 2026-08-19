@@ -10,7 +10,7 @@ export const CHANGELOG = [
     version: '0.11.0',
     date: '2026-08-20',
     highlights: [
-      'One keyboard can send up to eight parts. Each MIDI card picks a channel; each part arrives as its own instrument with its own sound, under your one address.',
+      'One MIDI device can send up to eight parts. Each MIDI card picks a channel; each part arrives as its own instrument with its own sound, under your one address.',
       'Everyone has to update for this. Notes on channels 2 to 8 are dropped by 0.10.0.',
       'The escrow balance updates as notes are played, not only on reload.',
       'The MIDI card shows how many notes you have sent and what they cost.',
@@ -20,7 +20,7 @@ export const CHANGELOG = [
     version: '0.10.0',
     date: '2026-08-19',
     highlights: [
-      'Plug your MIDI keyboard into the sonifier: "+ MIDI" in the second row. Every key becomes a real transaction, and you hear it when it comes back — the delay is the travel through a relay node.',
+      'Plug a MIDI device into the sonifier: "+ MIDI" in the second row. Every note becomes a real transaction, and you hear it when it comes back — the delay is the travel through a relay node.',
       'The account that sends txs is a logic sig escrow with no private key, so several people can play the same one at once, with no server in between.',
       'Your patch travels with your notes, so other players hear you in the sound you designed. "Others" in the second row turns that on, and narrows a session to one player.',
       'Addresses accept NFDs — type hampelman.algo instead of pasting 58 characters.',

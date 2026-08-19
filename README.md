@@ -27,8 +27,8 @@ sonifier works as soon as the page loads — press **Start**.
   and an LFO with several destinations.
 - **Visualizations** — Score, Territory and others render the same traffic
   you're hearing, full-screen, while it plays.
-- **A keyboard you can play** — plug in a MIDI device and each key becomes a
-  real transaction, heard when it comes back out of the mempool. The instrument
+- **An instrument you can play** — plug in a MIDI device and each note becomes
+  a real transaction, heard when it comes back out of the mempool. The instrument
   is a keyless escrow, so several people can play the same one at once, each in
   the sound they designed. See `SOA/projects/SOA-frontend/tools/midi/`.
 - **Presets** — save and load whole layouts, locally, as a `.json`, or minted
