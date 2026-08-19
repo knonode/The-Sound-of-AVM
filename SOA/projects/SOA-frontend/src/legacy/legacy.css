@@ -1328,5 +1328,8 @@
             color: #43b38d;
             font-family: 'Courier New', monospace;
             text-align: center;
+            /* Two lines: the shared hat, then your own spend. */
+            white-space: pre-line;
+            line-height: 1.5;
         }
 

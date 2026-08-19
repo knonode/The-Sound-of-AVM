@@ -1393,6 +1393,10 @@ if (typeof window !== 'undefined') {
     window.SOA_MIDI = {
         voices: () => Array.from(playerVoices, ([player, entry]) => ({ player, heardAt: entry.heardAt, voice: entry.voice })),
         playing: () => remoteInstances.map((r) => ({ player: r.player, engine: r.settings.engine, built: !!r.toneObjects })),
+        spend: () => {
+            const stats = getMidiStats();
+            return { ...stats, algo: (stats.sent * NOTE_FEE_MICROALGOS) / 1e6 };
+        },
     };
 }
 
@@ -2901,6 +2905,10 @@ async function handleEngineChangeLogic(instanceId, engine, synthElement) {
 let midiLastRoundTrip = null;
 let midiEscrowBalance = null;
 
+// Every note this instrument can send costs the network minimum, and the escrow
+// program refuses to sign one that offers more.
+const NOTE_FEE_MICROALGOS = 1000;
+
 function reportMidiRoundTrip(ms) {
     midiLastRoundTrip = ms;
     refreshMidiStatus();
@@ -2910,8 +2918,6 @@ function reportMidiRoundTrip(ms) {
 // this browser on the way back. So the readout is driven by what is heard
 // rather than by asking: a keypress anywhere in the world moves the number
 // here, at the same moment you hear the note that spent it.
-const NOTE_FEE_MICROALGOS = 1000;
-
 function spendFromEscrow() {
     if (midiEscrowBalance === null) return;
     midiEscrowBalance = Math.max(0, midiEscrowBalance - NOTE_FEE_MICROALGOS);
@@ -2949,11 +2955,28 @@ function stopEscrowWatchIfUnwatched() {
 }
 
 function refreshMidiStatus() {
+    // A card is about twenty-eight characters wide at this size, so each fact
+    // gets its own short line rather than a long one that wraps mid-phrase.
     const balance = midiEscrowBalance === null ? '—' : `${(midiEscrowBalance / 1e6).toFixed(3)} ALGO`;
-    const trip = midiLastRoundTrip === null ? 'unheard' : `${midiLastRoundTrip} ms round trip`;
+    const trip = midiLastRoundTrip === null ? 'unheard' : `${midiLastRoundTrip} ms`;
     const stats = getMidiStats();
-    const trouble = stats.failed ? ` · ${stats.failed} rejected` : '';
-    const text = `escrow: ${balance} · ${trip}${trouble}`;
+    const lines = [`escrow: ${balance}`, `round trip: ${trip}`];
+
+    // What the hat holds is everyone's; what you have spent is yours. An
+    // arpeggiator or a running sequencer bills you a note at a time without a
+    // finger moving, and the first you would otherwise know of it is an empty
+    // hat, so the count is worth its line on the card while it is happening.
+    if (stats.sent > 0) {
+        const spent = (stats.sent * NOTE_FEE_MICROALGOS) / 1e6;
+        const note = stats.sent === 1 ? 'note' : 'notes';
+        lines.push(`you: ${stats.sent} ${note}, ${spent.toFixed(3)} ALGO`);
+    }
+    // Dropped notes cost nothing, but you pressed a key and heard silence, which
+    // is worth saying rather than leaving you to wonder whether it went out.
+    if (stats.dropped) lines.push(`${stats.dropped} over the rate cap`);
+    if (stats.failed) lines.push(`${stats.failed} rejected`);
+
+    const text = lines.join('\n');
     activeSynths.forEach((instance) => {
         if (instance.config.type !== 'midi') return;
         const el = document.getElementById(`${instance.id}-midi-status`);
@@ -3023,9 +3046,7 @@ function handleMidiDeviceChange(instanceId, inputId) {
         const player = instance.config.parameters?.player?.trim();
         // Fire and forget: the note is not heard when it is sent, it is heard
         // when it comes back, so there is nothing to wait for here.
-        sendNote(midiNote, velocity, player, voiceForNextNote(instance)).then((xaid) => {
-            if (xaid === null) refreshMidiStatus();
-        });
+        sendNote(midiNote, velocity, player, voiceForNextNote(instance)).then(refreshMidiStatus);
     });
 }
 
