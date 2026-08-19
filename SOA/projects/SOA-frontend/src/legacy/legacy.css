@@ -304,7 +304,9 @@
            bar, and only ever one of them was in use at a time. */
         .viz-select {
             background-color: #004d4d;
-            color: #00cccc;
+            /* White, like the buttons beside it. The cyan the old viz buttons
+               used is harder to read at this size. */
+            color: white;
             border: 1px solid #006666;
             border-radius: 4px;
             font-size: 11px;
