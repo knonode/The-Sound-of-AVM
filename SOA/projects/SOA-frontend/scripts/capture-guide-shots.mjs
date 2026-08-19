@@ -53,6 +53,21 @@ const STATES = {
     await page.waitForSelector(card)
   },
 
+  // The MIDI card is built by its own button, not picked from the Type menu.
+  // A second card gives the auto-fit grid a normal track to draw it in.
+  midi: async (page) => {
+    await page.click('#add-midi')
+    await page.waitForSelector(card)
+    await page.click('#add-synth')
+    // The device list and the escrow balance both arrive asynchronously, and
+    // an empty status line is not what the guide should be showing.
+    await page.waitForFunction(
+      (sel) => (document.querySelector(sel)?.textContent ?? '').includes('escrow:'),
+      '.midi-status',
+      { timeout: 8000 },
+    ).catch(() => {})
+  },
+
   presets: async (page) => {
     await page.click('#load-preset')
     await page.waitForSelector('#modal-preset-buttons .preset-row')

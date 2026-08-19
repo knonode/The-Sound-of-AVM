@@ -7,6 +7,19 @@ import { APP_VERSION } from './app-version.js'
 // version string, commit, tag. The console warning below fires if the two drift.
 export const CHANGELOG = [
   {
+    version: '0.10.0',
+    date: '2026-08-19',
+    highlights: [
+      'A MIDI keyboard you can play into the mempool: + MIDI in the second row. Every key becomes a real transaction, and you hear it when it comes back — the delay is the instrument.',
+      'The keyboard belongs to nobody. It is an escrow with no private key, so several people can play the same one at once, with no server in between.',
+      'Your patch travels with your notes, so other players hear you in the sound you designed. Others in the second row turns that on, and narrows a session to one player.',
+      'Addresses accept NFDs — type hampelman.algo instead of pasting 58 characters.',
+      'Synth cards can be reordered, by dragging the grab strip under the header or with the keyboard. The order is part of the layout, so a preset keeps it.',
+      'Every control you can reach by Tab now has a focus ring you can see.',
+      'Fixed: transactions signed by a logic signature or a multisig could be mistaken for duplicates of each other and dropped before they were heard.',
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2026-07-26',
     // Keep these short — they're read in a one-line banner as often as in the modal.

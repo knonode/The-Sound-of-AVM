@@ -68,7 +68,12 @@ export const GUIDE_SECTIONS = [
       <p>The named buttons on the left open <strong>visualizations</strong> — full-screen
       pictures of the same data you're hearing. More on those below.</p>
       <p><strong>+ Add Synth</strong> on the right adds an empty synth card. That's where
-      you start when building your own.</p>
+      you start when building your own. <strong>+ MIDI</strong> beside it adds a keyboard
+      card — see the last section.</p>
+      <p><strong>Others</strong> decides whether you hear other people playing that
+      keyboard, each in the sound they designed. The box next to it narrows a crowded
+      session down to one player: paste an address or type a <code>name.algo</code>.
+      Leave it blank to hear everyone.</p>
       <p><strong>gossip:</strong> is the connection light — <em>idle</em> before you
       start, <em>open</em> when transactions are flowing.</p>
       <p><strong>Mode</strong> decides what happens when one synth is being triggered
@@ -450,6 +455,38 @@ export const GUIDE_SECTIONS = [
       match. Copy the URL and whoever opens it lands on the same layout. Presets saved
       only in your own browser have no URL — copy them out as <code>.json</code>, or mint
       them, to pass them on.</p>
+    `,
+  },
+
+  {
+    id: '21-midi',
+    title: 'Playing it yourself',
+    selector: '.mini-synth:not(.master-synth)',
+    state: 'midi',
+    body: `
+      <p>Everything else here listens. This card plays. Plug in a MIDI keyboard, pick it
+      under <strong>Device</strong>, and every key you press becomes a real Algorand
+      transaction — a zero-amount transfer of an asset that doesn't exist, where the
+      asset ID is the note and how hard you hit it.</p>
+      <p>You won't hear a key when you press it. You'll hear it when it comes back to
+      you out of the mempool, most of a second later, and gossip makes no promise about
+      the order. That delay is the instrument. Slow, spread-out, chordal playing sounds
+      like you meant it; fast runs come back scrambled.</p>
+      <p>The keyboard belongs to nobody. It's an escrow account with no private key,
+      holding a program that will only ever sign one shape of transaction, so anyone who
+      has it can play — at the same time as you, with no server in between. Each note
+      costs the minimum fee, 0.001 ALGO, out of that shared balance.</p>
+      <p><strong>Play as</strong> is how anyone tells your playing apart from anyone
+      else's. An address or a <code>name.algo</code>; it goes on every note and costs
+      nothing, because a zero-amount transfer never touches the account it's sent to.
+      Leave it empty to play anonymously — but then your sound can't travel, since
+      there's no name to attach it to.</p>
+      <p>If you have filled it in, your sound travels with you. Every note carries your
+      whole patch in its note field, which is free space on a transaction you're already
+      paying for, so anyone listening hears your notes voiced the way you built them —
+      and hears a change on your very next keypress. The same is true in reverse: turn
+      <strong>Others</strong> on and up to four other players get their own voice on
+      your machine.</p>
     `,
   },
 ]
