@@ -490,6 +490,11 @@ export const GUIDE_SECTIONS = [
       <p>Every card is its own instrument either way. Two keyboards on two cards, both
       on <em>all</em>, stay two instruments: only the card you played on sounds. Up to
       eight cards, under your one address.</p>
+      <p>The card remembers which device it was on, so reloading gives you your
+      keyboards back. That's kept on this machine rather than in the preset — a
+      device id means nothing on anyone else's — and it falls back to the device's
+      name if the browser numbers it differently next time. Plug a keyboard back
+      in mid-session and the card that had it picks it up again.</p>
       <p><strong>Send</strong>, next to the + MIDI button, says whether your notes
       go to the mempool. It starts off. With it off the note sounds on the card you
       played it on, straight away, and nothing is sent and nothing is spent — which

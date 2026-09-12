@@ -1754,8 +1754,14 @@ async function loadPresetFromSource(source, { deferAudio = false } = {}) {
         // Update State and Rebuild UI
         activeSynths.push(...targetActiveSynths);
 
+        // One insert for the whole layout, and the parameter areas after it.
+        // `innerHTML +=` re-parses the container on every card, which throws
+        // away the DOM of the cards already in it — and a MIDI card fills its
+        // device list asynchronously, so the second card's rebuild landed
+        // before the first card's devices arrived, and they arrived into a
+        // select that was no longer on the page.
+        synthContainer.insertAdjacentHTML('beforeend', targetActiveSynths.map(createSynthHTML).join(''));
         targetActiveSynths.forEach(instance => {
-            synthContainer.innerHTML += createSynthHTML(instance);
             renderParameterArea(instance.id, instance.config.type, instance.config.subtype);
         });
 
@@ -3089,6 +3095,113 @@ async function copyEscrowAddress(el) {
     }, 1400);
 }
 
+// Which device each card was last pointed at. The id is what the browser uses
+// and the name is what survives it: ids are stable for a profile on a machine,
+// which is where nearly every session happens, but they change with a cleared
+// profile or another browser, and a name does not. Kept out of the preset — a
+// layout is meant to travel, and a device id means nothing on another machine
+// — so it lives in localStorage next to the machine it describes.
+const MIDI_DEVICE_MEMORY_KEY = 'soaMidiDevices';
+// Cards accumulate over months of presets. Thirty-two is far more than anyone
+// has open at once and small enough to never be worth thinking about.
+const MIDI_DEVICE_MEMORY_LIMIT = 32;
+
+function readMidiDeviceMemory() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(MIDI_DEVICE_MEMORY_KEY) || '{}');
+        return stored && typeof stored === 'object' ? stored : {};
+    } catch {
+        return {}; // a corrupt entry is not worth a broken picker
+    }
+}
+
+function writeMidiDeviceMemory(memory) {
+    // Oldest out first, so the cards you have touched recently are the ones
+    // that are remembered.
+    const entries = Object.entries(memory).sort((a, b) => (b[1].at ?? 0) - (a[1].at ?? 0));
+    try {
+        localStorage.setItem(
+            MIDI_DEVICE_MEMORY_KEY,
+            JSON.stringify(Object.fromEntries(entries.slice(0, MIDI_DEVICE_MEMORY_LIMIT))),
+        );
+    } catch (err) {
+        console.warn('Could not remember the MIDI device:', err);
+    }
+}
+
+function rememberMidiDevice(instanceId, inputId, name) {
+    const memory = readMidiDeviceMemory();
+    if (!inputId) delete memory[instanceId];
+    else memory[instanceId] = { id: inputId, name, at: Date.now() };
+    writeMidiDeviceMemory(memory);
+}
+
+/**
+ * The device this card had last time, if it is plugged in now. By id first,
+ * then by name for the same keyboard on a browser that numbers it differently.
+ *
+ * A device another card is already holding is passed over: two keyboards of the
+ * same model share a name, and handing both cards the first one would undo the
+ * thing that makes them two parts.
+ */
+function recallMidiDevice(instanceId, inputs) {
+    const remembered = readMidiDeviceMemory()[instanceId];
+    if (!remembered) return '';
+    const taken = new Set(
+        activeSynths.filter((i) => i.id !== instanceId && i._midiDevice).map((i) => i._midiDevice),
+    );
+    const byId = inputs.find((input) => input.id === remembered.id);
+    if (byId && !taken.has(byId.id)) return byId.id;
+    const byName = inputs.find((input) => input.name === remembered.name && !taken.has(input.id));
+    return byName ? byName.id : '';
+}
+
+/** Fill one card's picker and give it back the device it was on. */
+function populateMidiDeviceSelect(instanceId, inputs) {
+    const select = document.getElementById(`${instanceId}-midi-device`);
+    const instance = findInstance(instanceId);
+    if (!select || !instance) return;
+    select.innerHTML = '<option value="">MIDI</option>';
+    for (const input of inputs) {
+        const option = document.createElement('option');
+        option.value = input.id;
+        option.textContent = input.name;
+        select.appendChild(option);
+    }
+    // The list arrives after the card is drawn, so a card that already had a
+    // device has to be given it back — and a card that has none can have the
+    // one it was on before the page was reloaded, or before that keyboard was
+    // unplugged and put back.
+    const held = inputs.some((input) => input.id === instance._midiDevice)
+        ? instance._midiDevice
+        : recallMidiDevice(instanceId, inputs);
+    select.value = held ?? '';
+    if ((instance._midiDevice ?? '') !== (held ?? '')) {
+        instance._midiDevice = held ?? '';
+        rebindMidiCard(instanceId);
+    }
+}
+
+// Devices come and go, and every card's picker has to hear about it. One
+// handler for the instrument rather than one per card: the browser holds a
+// single onstatechange, so a per-card handler meant only the last card added
+// ever saw a keyboard arrive.
+let midiPortWatchStarted = false;
+
+function startMidiPortWatch() {
+    if (midiPortWatchStarted) return;
+    midiPortWatchStarted = true;
+    onMidiPortChange(() => {
+        listMidiInputs()
+            .then((current) => {
+                activeSynths.forEach((instance) => {
+                    if (instance.config.type === 'midi') populateMidiDeviceSelect(instance.id, current);
+                });
+            })
+            .catch((err) => console.warn('Could not re-read the MIDI devices:', err));
+    });
+}
+
 async function initializeMidiCard(instanceId) {
     const select = document.getElementById(`${instanceId}-midi-device`);
     const status = document.getElementById(`${instanceId}-midi-status`);
@@ -3104,32 +3217,9 @@ async function initializeMidiCard(instanceId) {
 
     try {
         const inputs = await listMidiInputs();
-        if (!select) return;
-        for (const input of inputs) {
-            const option = document.createElement('option');
-            option.value = input.id;
-            option.textContent = input.name;
-            select.appendChild(option);
-        }
-        // The device list arrives after the card is drawn, so a card that
-        // already had one selected has to be given it back.
-        const held = findInstance(instanceId)?._midiDevice;
-        if (held) select.value = held;
+        populateMidiDeviceSelect(instanceId, inputs);
         if (inputs.length === 0 && status) status.textContent = 'No MIDI devices found. Plug one in.';
-        // Devices come and go; the list should not go stale in front of you.
-        onMidiPortChange(() => {
-            const chosen = select.value;
-            listMidiInputs().then((current) => {
-                select.innerHTML = '<option value="">(none)</option>';
-                for (const input of current) {
-                    const option = document.createElement('option');
-                    option.value = input.id;
-                    option.textContent = input.name;
-                    option.selected = input.id === chosen;
-                    select.appendChild(option);
-                }
-            });
-        });
+        startMidiPortWatch();
     } catch (err) {
         if (status) status.textContent = `MIDI unavailable: ${err.message}`;
     }
@@ -3143,10 +3233,11 @@ async function initializeMidiCard(instanceId) {
 function rebindMidiCard(instanceId) {
     const instance = findInstance(instanceId);
     if (!instance || instance.config.type !== 'midi') return;
-    // The device is session state, not layout: its id means nothing on another
-    // machine, so it lives on the instance and stays out of saved presets. The
-    // channel is a musical decision about which part this card plays, so it
-    // belongs in the layout and is saved with it.
+    // The device lives on the instance and stays out of saved presets: its id
+    // means nothing on another machine, and a layout is meant to travel. It is
+    // remembered per machine in localStorage instead. The channel is a musical
+    // decision about which part this card plays, so it does belong in the
+    // layout and is saved with it.
     const inputId = instance._midiDevice ?? '';
     if (!inputId) {
         unbindMidiCard(instanceId);
@@ -3172,6 +3263,8 @@ function handleMidiDeviceChange(instanceId, inputId) {
     const instance = findInstance(instanceId);
     if (!instance) return;
     instance._midiDevice = inputId;
+    const select = document.getElementById(`${instanceId}-midi-device`);
+    rememberMidiDevice(instanceId, inputId, select?.selectedOptions?.[0]?.textContent ?? '');
     rebindMidiCard(instanceId);
 }
 
@@ -4499,9 +4592,14 @@ const loadPresetFromLocalStorage = async (presetNameToLoad) => {
   console.log("Applied loaded/migrated settings. Active Synths:", activeSynths);
 
   console.log("Rebuilding UI...");
+  // One insert for the whole layout, and the parameter areas after it.
+  // `innerHTML +=` re-parses the container on every card, which throws
+  // away the DOM of the cards already in it — and a MIDI card fills its
+  // device list asynchronously, so the second card's rebuild landed
+  // before the first card's devices arrived, and they arrived into a
+  // select that was no longer on the page.
+  synthContainer.insertAdjacentHTML('beforeend', targetActiveSynths.map(createSynthHTML).join(''));
   targetActiveSynths.forEach(instance => {
-      synthContainer.innerHTML += createSynthHTML(instance);
-      // Render parameter area based on loaded config
       renderParameterArea(instance.id, instance.config.type, instance.config.subtype);
   });
 
@@ -4602,8 +4700,14 @@ function loadNftPreset(presetData) {
     // Update State and Rebuild UI
     activeSynths.push(...targetActiveSynths);
 
+    // One insert for the whole layout, and the parameter areas after it.
+    // `innerHTML +=` re-parses the container on every card, which throws
+    // away the DOM of the cards already in it — and a MIDI card fills its
+    // device list asynchronously, so the second card's rebuild landed
+    // before the first card's devices arrived, and they arrived into a
+    // select that was no longer on the page.
+    synthContainer.insertAdjacentHTML('beforeend', targetActiveSynths.map(createSynthHTML).join(''));
     targetActiveSynths.forEach(instance => {
-      synthContainer.innerHTML += createSynthHTML(instance);
       renderParameterArea(instance.id, instance.config.type, instance.config.subtype);
     });
 

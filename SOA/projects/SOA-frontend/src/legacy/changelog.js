@@ -7,6 +7,14 @@ import { APP_VERSION } from './app-version.js'
 // version string, commit, tag. The console warning below fires if the two drift.
 export const CHANGELOG = [
   {
+    version: '0.12.1',
+    date: '2026-09-12',
+    highlights: [
+      'A MIDI card remembers which device it was on, so a reload gives you your keyboards back. Remembered per machine, not saved into the preset, and matched by name if the browser renumbers the device.',
+      'Fixed: loading a preset with more than one MIDI card left every card but the last with an empty device picker, and only the last card noticed a keyboard being plugged in.',
+    ],
+  },
+  {
     version: '0.12.0',
     date: '2026-09-12',
     highlights: [
