@@ -7,6 +7,14 @@ import { APP_VERSION } from './app-version.js'
 // version string, commit, tag. The console warning below fires if the two drift.
 export const CHANGELOG = [
   {
+    version: '0.12.0',
+    date: '2026-09-12',
+    highlights: [
+      'Send, next to + MIDI, decides whether notes go to the mempool. It starts off, so you can design a sound without spending anything. The card says local instead of a latency while it is off.',
+      'Fixed: two MIDI cards on two keyboards both sounded when you played either one. Each card is now its own part, whatever channel it listens to.',
+    ],
+  },
+  {
     version: '0.11.0',
     date: '2026-08-20',
     highlights: [

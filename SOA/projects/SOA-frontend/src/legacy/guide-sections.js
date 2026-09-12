@@ -486,8 +486,19 @@ export const GUIDE_SECTIONS = [
       <p>The second dropdown in the header is the <strong>channel</strong>. Leave it on
       <em>all</em> for a device that sends on one. For one that sends several tracks at
       once — a groovebox, a sequencer — add a card per track and give each its own
-      channel. Each card has its own sound, and each track arrives as a separate
-      instrument. Up to eight.</p>
+      channel.</p>
+      <p>Every card is its own instrument either way. Two keyboards on two cards, both
+      on <em>all</em>, stay two instruments: only the card you played on sounds. Up to
+      eight cards, under your one address.</p>
+      <p><strong>Send</strong>, next to the + MIDI button, says whether your notes
+      go to the mempool. It starts off. With it off the note sounds on the card you
+      played it on, straight away, and nothing is sent and nothing is spent — which
+      is what you want while you're designing the sound. Turn it on to play for
+      real. The card's status line says which it is: <em>local</em>, or a latency.</p>
+      <p>The note you hear locally is the note that would come back, down to the
+      velocity, which the wire rounds to one of a hundred steps. What it can't
+      reproduce is the delay. Sounds carry over from local to live; timing doesn't,
+      and a fast run that works locally won't survive the round trip.</p>
       <p><strong>Play as</strong> is how anyone tells your playing apart from anyone
       else's. An address or an NFD <code>name.algo</code>. Leave it empty to play
       anonymously — but then your sound can't travel, since there's no name to

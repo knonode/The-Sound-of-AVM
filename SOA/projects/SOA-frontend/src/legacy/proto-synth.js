@@ -49,6 +49,7 @@ import {
 
 import {
     decodeNote,
+    encodeNote,
     sendNote,
     claimRoundTrip,
     listMidiInputs,
@@ -600,7 +601,7 @@ const createSynthHTML = (synthInstance) => {
             <select id="${uniqueId}-midi-device" class="midi-device-select" data-instance-id="${uniqueId}" title="Which MIDI device this card plays from">
                 <option value="">MIDI</option>
             </select>
-            <select id="${uniqueId}-midi-channel" class="midi-channel-select" data-instance-id="${uniqueId}" title="Which MIDI channel this card plays. One card per channel turns a multi-track device into separate parts, each with its own sound.">
+            <select id="${uniqueId}-midi-channel" class="midi-channel-select" data-instance-id="${uniqueId}" title="Which MIDI channel this card listens to. Use a numbered channel to take one track of a device that sends several; all takes the whole device.">
                 ${midiChannelOptions(config.parameters?.channel ?? 0)}
             </select>
             <button class="mute-btn" data-instance-id="${uniqueId}" title="Mute/Unmute Synth">${settings.muted ? svgIconMuted : svgIconUnmuted}</button>
@@ -2353,6 +2354,18 @@ export async function bootLegacySynth() {
     setSoloPlayer(valid ? typed : '');
   });
 
+  // Sending is instrument-wide, and it sits next to the button that makes the
+  // instrument. Its neighbours in this bar all say their state in their label,
+  // since they share one fill and a colour would say nothing.
+  const toggleMidiSendBtn = document.getElementById('toggle-midi-send-btn');
+  toggleMidiSendBtn?.addEventListener('click', () => {
+    midiSendEnabled = !midiSendEnabled;
+    refreshMidiSendControl();
+    // The card carries the same fact on its status line, and that is where you
+    // are looking while you play.
+    refreshMidiStatus();
+  });
+
   // A MIDI card is built here rather than picked from the Type menu: it is not
   // a filter over the feed like the others, and putting it in that menu would
   // offer it to every card and add a counter that never moves for anyone who
@@ -2361,7 +2374,9 @@ export async function bootLegacySynth() {
     const uniqueId = `synth-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const newInstance = {
         id: uniqueId,
-        config: { type: 'midi', subtype: null, parameters: { player: '' } },
+        // The part is claimed here rather than at the first keypress, so two
+        // cards are two parts from the moment the second one appears.
+        config: { type: 'midi', subtype: null, parameters: { player: '', part: firstFreePart(null) } },
         settings: {
             ...getDefaultInstanceSettings(),
             // Middle C is the hinge the incoming offsets are measured from, so
@@ -2920,6 +2935,50 @@ async function handleEngineChangeLogic(instanceId, engine, synthElement) {
 
 // --- MIDI card ------------------------------------------------------------
 
+// Whether a keypress goes to the mempool. Off by default: you add a card to
+// design a sound, and the first half hour of that is sweeping a filter, which
+// should not cost a shared escrow a note at a time. Instrument-wide rather than
+// per card — spending is a property of the instrument, and four little switches
+// would be four places to look before you knew whether you were paying.
+let midiSendEnabled = false;
+
+export const isMidiSendEnabled = () => midiSendEnabled;
+
+/**
+ * Sound a note on the card that played it, without the network.
+ *
+ * Through the same encoding the mempool would have applied, so what you hear
+ * while designing is the note that would have come back: velocity lands on one
+ * of a hundred steps and stops short of silence, exactly as it does on the wire.
+ * The one thing this cannot reproduce is the round trip — local is honest about
+ * timbre, not about time.
+ */
+function playNoteLocally(instance, midiNote, velocity, part) {
+    const carried = decodeNote(encodeNote(midiNote, velocity, part));
+    if (!carried) return;
+    const opts = {
+        semitoneOffset: carried.midiNote - MIDI_MIDDLE_C,
+        velocity: Math.max(0.05, Math.min(1, carried.velocity)),
+    };
+    // A card added before the stream was started has no voice built yet, and a
+    // keypress is as good a reason to build one as the Play button.
+    if (!instance.toneObjects) {
+        initializeToneForInstance(instance)
+            .then(() => { if (instance.toneObjects) triggerInstanceWithRateLimit(instance, 0, opts); })
+            .catch((err) => console.error('Could not initialize audio for a local note:', err));
+        return;
+    }
+    triggerInstanceWithRateLimit(instance, 0, opts);
+}
+
+/** Show the send toggle only while there is a MIDI card to send from. */
+function refreshMidiSendControl() {
+    const button = document.getElementById('toggle-midi-send-btn');
+    if (!button) return;
+    button.hidden = !activeSynths.some((i) => i.config.type === 'midi');
+    button.textContent = midiSendEnabled ? 'Send: on' : 'Send: off';
+}
+
 // The last round trip this browser measured: the time between putting a note
 // into the mempool and hearing it come back. It is the honest latency of the
 // instrument, so it is shown rather than hidden.
@@ -2982,7 +3041,10 @@ function refreshMidiStatus() {
     const balance = midiEscrowBalance === null ? '—' : `${(midiEscrowBalance / 1e6).toFixed(3)}`;
     const latency = midiLastRoundTrip === null ? '—' : `${midiLastRoundTrip}ms`;
     const stats = getMidiStats();
-    const lines = [`bal. ${balance} · lat. ${latency}`];
+    // The toggle is in the toolbar, but this is the line you look at while
+    // playing, and a card that is not sending looks exactly like one that is.
+    // Latency means nothing when nothing is travelling, so it gives up its half.
+    const lines = [midiSendEnabled ? `bal. ${balance} · lat. ${latency}` : `bal. ${balance} · local`];
 
     // What the hat holds is everyone's; what you have spent is yours. An
     // arpeggiator or a running sequencer bills you a note at a time without a
@@ -3032,6 +3094,7 @@ async function initializeMidiCard(instanceId) {
     const status = document.getElementById(`${instanceId}-midi-status`);
 
     startEscrowWatch();
+    refreshMidiSendControl();
 
     if (!midiSupported()) {
         if (select) select.disabled = true;
@@ -3090,10 +3153,14 @@ function rebindMidiCard(instanceId) {
         return;
     }
     const channel = Number(instance.config.parameters?.channel ?? 0);
-    // A card's part is its channel, so the track you played on is the track it
-    // arrives as. Channel 0 — the whole device — is part 0.
+    // Every card is its own part, so the card you played on is the card that
+    // sounds it — whichever device or channel it is listening to.
     const part = cardPart(instance);
     bindMidiCard(instanceId, inputId, channel, (midiNote, velocity) => {
+        if (!midiSendEnabled) {
+            playNoteLocally(instance, midiNote, velocity, part);
+            return;
+        }
         const player = instance.config.parameters?.player?.trim();
         // Fire and forget: the note is not heard when it is sent, it is heard
         // when it comes back, so there is nothing to wait for here.
@@ -3113,18 +3180,51 @@ function handleMidiChannelChange(instanceId, channel) {
     if (!instance) return;
     if (!instance.config.parameters) instance.config.parameters = {};
     instance.config.parameters.channel = Number(channel) || 0;
+    // The channel says which track of a device this card listens to. It does
+    // not say which part the card is — that is the card's own, and it stays put
+    // when you change the channel.
     rebindMidiCard(instanceId);
 }
 
-/** Which part a card plays. Channel 0 — the whole device — is part 0. */
+/**
+ * Which part a card plays. The part is the card's own — two cards on two
+ * keyboards are two parts even though both take the whole device — because the
+ * part is the only thing in a note that tells one of this player's cards from
+ * another when the note comes back. Deriving it from the channel alone made
+ * every "all" card part 0, so one keypress sounded on all of them.
+ *
+ * Assigned once, on first use, and kept in the parameters so it is saved with
+ * the layout. A card that came from a layout written before parts were a card's
+ * own keeps the part its channel used to mean.
+ */
 function cardPart(instance) {
-    const channel = Number(instance.config?.parameters?.channel ?? 0);
-    return channel === 0 ? 0 : (channel - 1) % PARTS;
+    const params = instance.config?.parameters;
+    if (!params) return 0;
+    if (Number.isInteger(params.part)) return params.part;
+    const channel = Number(params.channel ?? 0);
+    params.part = channel === 0 ? firstFreePart(instance) : (channel - 1) % PARTS;
+    return params.part;
+}
+
+/** The lowest part no other MIDI card is holding. */
+function firstFreePart(self) {
+    const taken = new Set();
+    activeSynths.forEach((other) => {
+        if (other === self || other.config?.type !== 'midi') return;
+        const params = other.config.parameters ?? {};
+        if (Number.isInteger(params.part)) taken.add(params.part);
+        // A card that hasn't claimed its part yet will claim the one its
+        // channel names, so that one isn't free either.
+        else if (Number(params.channel ?? 0) !== 0) taken.add((Number(params.channel) - 1) % PARTS);
+    });
+    for (let part = 0; part < PARTS; part++) if (!taken.has(part)) return part;
+    // Eight parts are all a note has room for. A ninth card shares part 0: it
+    // still sounds, it just answers to the same notes as the card that has it.
+    return 0;
 }
 
 // "all" takes the whole keyboard, which is what one player with one keyboard
-// wants. A numbered channel takes one track of a device that sends several, and
-// becomes the part that track arrives as.
+// wants. A numbered channel takes one track of a device that sends several.
 function midiChannelOptions(selected) {
     const options = [`<option value="0"${Number(selected) === 0 ? ' selected' : ''}>all</option>`];
     for (let channel = 1; channel <= PARTS; channel++) {
@@ -3479,7 +3579,10 @@ const handleCloseLogic = (instanceId, synthElement) => {
         disposeSynth(instanceId, activeSynths);
         activeSynths.splice(index, 1);
         synthElement.remove();
-        if (wasMidi) stopEscrowWatchIfUnwatched();
+        if (wasMidi) {
+            stopEscrowWatchIfUnwatched();
+            refreshMidiSendControl();
+        }
         console.log("Active synths after close:", activeSynths);
     } else {
         console.warn(`Could not find synth instance ${instanceId} to remove.`);
